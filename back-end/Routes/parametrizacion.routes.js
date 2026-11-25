@@ -1,0 +1,164 @@
+const router = require('express').Router();
+const { body } = require('express-validator');
+const { autenticar } = require('../Middleware/auth.middleware');
+const { autorizarAdmin } = require('../Middleware/rbac.middleware');
+const {
+  universidadCtrl,
+  facultadCtrl,
+  carreraCtrl,
+  periodoCtrl,
+  criterioCtrl,
+  indicadorCtrl,
+  subcriterioCtrl,
+  carpetaCtrl,
+  actividadCtrl,
+  estructura,
+  asignarUsuariosActividad,
+  asignarResponsablesIndicador,
+  asignarResponsablesSubcriterio,
+  generarEstructuraCarrera,
+  docenteCtrl,
+} = require('../Controller/parametrizacion.controller');
+
+// Solo ADMINISTRADOR puede crear/editar/eliminar parametrización
+const soloAdmin = [autenticar, autorizarAdmin()];
+
+// Árbol completo para el explorador de archivos (todos los autenticados)
+router.get('/estructura', autenticar, estructura);
+
+// ─── Universidad ───────────────────────────────────────────────────────────
+router.get('/universidades', autenticar, universidadCtrl.listar);
+router.get('/universidades/:id', autenticar, universidadCtrl.obtener);
+router.post('/universidades', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  universidadCtrl.crear
+);
+router.put('/universidades/:id', ...soloAdmin, universidadCtrl.actualizar);
+router.delete('/universidades/:id', ...soloAdmin, universidadCtrl.eliminar);
+
+// ─── Facultad ──────────────────────────────────────────────────────────────
+router.get('/facultades', autenticar, facultadCtrl.listar);
+router.get('/facultades/:id', autenticar, facultadCtrl.obtener);
+router.post('/facultades', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body('universidad_id').isInt().withMessage('Universidad requerida'),
+  facultadCtrl.crear
+);
+router.put('/facultades/:id', ...soloAdmin, facultadCtrl.actualizar);
+router.delete('/facultades/:id', ...soloAdmin, facultadCtrl.eliminar);
+
+// ─── Carrera ───────────────────────────────────────────────────────────────
+router.get('/carreras', autenticar, carreraCtrl.listar);
+router.get('/carreras/:id', autenticar, carreraCtrl.obtener);
+router.post('/carreras', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body('facultad_id').isInt().withMessage('Facultad requerida'),
+  carreraCtrl.crear
+);
+router.put('/carreras/:id', ...soloAdmin, carreraCtrl.actualizar);
+router.delete('/carreras/:id', ...soloAdmin, carreraCtrl.eliminar);
+router.post('/carreras/:id/generar-estructura', ...soloAdmin, generarEstructuraCarrera);
+
+// ─── Periodo ───────────────────────────────────────────────────────────────
+router.get('/periodos', autenticar, periodoCtrl.listar);
+router.get('/periodos/:id', autenticar, periodoCtrl.obtener);
+router.post('/periodos', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body().custom(b => {
+    if (!b.facultad_id && !b.carrera_id) {
+      throw new Error('Debe especificar facultad_id o carrera_id');
+    }
+    return true;
+  }),
+  periodoCtrl.crear
+);
+router.put('/periodos/:id', ...soloAdmin, periodoCtrl.actualizar);
+router.delete('/periodos/:id', ...soloAdmin, periodoCtrl.eliminar);
+
+// ─── Criterio ──────────────────────────────────────────────────────────────
+router.get('/criterios', autenticar, criterioCtrl.listar);
+router.get('/criterios/:id', autenticar, criterioCtrl.obtener);
+router.post('/criterios', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  criterioCtrl.crear
+);
+router.put('/criterios/:id', ...soloAdmin, criterioCtrl.actualizar);
+router.delete('/criterios/:id', ...soloAdmin, criterioCtrl.eliminar);
+
+// ─── Subcriterio ───────────────────────────────────────────────────────────
+router.get('/subcriterios', autenticar, subcriterioCtrl.listar);
+router.get('/subcriterios/:id', autenticar, subcriterioCtrl.obtener);
+router.post('/subcriterios', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body('numero').isInt().withMessage('Número de subcriterio requerido'),
+  body('criterio_id').isInt().withMessage('Criterio requerido'),
+  subcriterioCtrl.crear
+);
+router.put('/subcriterios/:id', ...soloAdmin, subcriterioCtrl.actualizar);
+router.delete('/subcriterios/:id', ...soloAdmin, subcriterioCtrl.eliminar);
+router.post('/subcriterios/:id/responsables', ...soloAdmin,
+  body('responsablesIds').isArray().withMessage('responsablesIds debe ser un arreglo'),
+  asignarResponsablesSubcriterio
+);
+
+// ─── Indicador (Legacy) ────────────────────────────────────────────────────
+router.get('/indicadores', autenticar, indicadorCtrl.listar);
+router.get('/indicadores/:id', autenticar, indicadorCtrl.obtener);
+router.post('/indicadores', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body('numero').isInt().withMessage('Número de indicador requerido'),
+  body('criterio_id').isInt().withMessage('Criterio requerido'),
+  indicadorCtrl.crear
+);
+router.put('/indicadores/:id', ...soloAdmin, indicadorCtrl.actualizar);
+router.delete('/indicadores/:id', ...soloAdmin, indicadorCtrl.eliminar);
+router.post('/indicadores/:id/responsables', ...soloAdmin,
+  body('responsablesIds').isArray().withMessage('responsablesIds debe ser un arreglo'),
+  asignarResponsablesIndicador
+);
+
+// ─── Carpeta (dentro de Subcriterio — gestión exclusiva ADMINISTRADOR) ─────
+router.get('/carpetas', autenticar, carpetaCtrl.listar);
+router.get('/carpetas/:id', autenticar, carpetaCtrl.obtener);
+router.post('/carpetas', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre de carpeta requerido'),
+  body('subcriterio_id').isInt().withMessage('Subcriterio requerido'),
+  carpetaCtrl.crear
+);
+router.put('/carpetas/:id', ...soloAdmin, carpetaCtrl.actualizar);
+router.delete('/carpetas/:id', ...soloAdmin, carpetaCtrl.eliminar);
+
+// ─── Actividad ─────────────────────────────────────────────────────────────
+router.get('/actividades', autenticar, actividadCtrl.listar);
+router.get('/actividades/:id', autenticar, actividadCtrl.obtener);
+router.post('/actividades', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body().custom(b => {
+    if (!b.subcriterio_id && !b.indicador_id) {
+      throw new Error('Debe especificar subcriterio_id o indicador_id');
+    }
+    return true;
+  }),
+  actividadCtrl.crear
+);
+router.put('/actividades/:id', ...soloAdmin, actividadCtrl.actualizar);
+router.delete('/actividades/:id', ...soloAdmin, actividadCtrl.eliminar);
+router.post('/actividades/:id/usuarios', ...soloAdmin,
+  body('usuariosIds').isArray().withMessage('usuariosIds debe ser un arreglo'),
+  asignarUsuariosActividad
+);
+
+// ─── Docentes (Gestión N:M con Facultades y Actividades) ───────────────────
+router.get('/docentes', autenticar, docenteCtrl.listar);
+router.get('/docentes/elegibles', autenticar, docenteCtrl.elegibles);
+router.get('/docentes/:id', autenticar, docenteCtrl.obtener);
+router.post('/docentes', ...soloAdmin,
+  body('nombre').notEmpty().withMessage('Nombre requerido'),
+  body('email').isEmail().withMessage('Email inválido'),
+  docenteCtrl.crear
+);
+router.put('/docentes/:id', ...soloAdmin, docenteCtrl.actualizar);
+router.delete('/docentes/:id', ...soloAdmin, docenteCtrl.eliminar);
+
+module.exports = router;
+

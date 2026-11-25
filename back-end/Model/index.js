@@ -1,0 +1,145 @@
+const sequelize = require('../config/database');
+const Rol = require('./Rol');
+const Usuario = require('./Usuario');
+const Universidad = require('./Universidad');
+const Facultad = require('./Facultad');
+const Carrera = require('./Carrera');
+const Periodo = require('./Periodo');
+const Criterio = require('./Criterio');
+const Indicador = require('./Indicador');
+const Subcriterio = require('./Subcriterio');
+const Carpeta = require('./Carpeta');
+const Actividad = require('./Actividad');
+const Documento = require('./Documento');
+const UsuarioRol = require('./UsuarioRol');
+const UsuarioCarrera = require('./UsuarioCarrera');
+const FlujoFirma = require('./FlujoFirma');
+const PasoFirma = require('./PasoFirma');
+const UsuarioFacultad = require('./UsuarioFacultad');
+const UsuarioActividad = require('./UsuarioActividad');
+
+// ─── Usuario ↔ Rol ──────────────────────────────────────────────────────────
+Usuario.belongsToMany(Rol, { through: UsuarioRol, as: 'roles', foreignKey: 'usuario_id' });
+Rol.belongsToMany(Usuario, { through: UsuarioRol, as: 'usuarios', foreignKey: 'rol_id' });
+
+// ─── Usuario ↔ Facultad (N:M) ──────────────────────────────────────────────
+Usuario.belongsToMany(Facultad, { through: UsuarioFacultad, as: 'facultades', foreignKey: 'usuario_id', otherKey: 'facultad_id' });
+Facultad.belongsToMany(Usuario, { through: UsuarioFacultad, as: 'usuarios', foreignKey: 'facultad_id', otherKey: 'usuario_id' });
+
+// Relación directa 1:N conservada para retrocompatibilidad con columna facultad_id
+Usuario.belongsTo(Facultad, { foreignKey: 'facultad_id', as: 'facultad' });
+Facultad.hasMany(Usuario, { foreignKey: 'facultad_id', as: 'usuariosDirectos' });
+
+// ─── Usuario ↔ Actividad (N:M) ─────────────────────────────────────────────
+Usuario.belongsToMany(Actividad, { through: UsuarioActividad, as: 'actividades', foreignKey: 'usuario_id', otherKey: 'actividad_id' });
+Actividad.belongsToMany(Usuario, { through: UsuarioActividad, as: 'usuarios', foreignKey: 'actividad_id', otherKey: 'usuario_id' });
+
+// ─── Usuario ↔ Carrera (M:N) ────────────────────────────────────────────────
+Usuario.belongsToMany(Carrera, { through: UsuarioCarrera, as: 'carreras', foreignKey: 'usuario_id' });
+Carrera.belongsToMany(Usuario, { through: UsuarioCarrera, as: 'usuarios', foreignKey: 'carrera_id' });
+
+// ─── Jerarquía: Universidad → Facultad → Período → Carrera → Criterio → Subcriterio → Documento
+Facultad.belongsTo(Universidad, { foreignKey: 'universidad_id', as: 'universidad' });
+Universidad.hasMany(Facultad, { foreignKey: 'universidad_id', as: 'facultades' });
+
+Carrera.belongsTo(Facultad, { foreignKey: 'facultad_id', as: 'facultad' });
+Facultad.hasMany(Carrera, { foreignKey: 'facultad_id', as: 'carreras' });
+
+// Período pertenece a Facultad (nueva estructura principal) y a Carrera (compatibilidad)
+Facultad.hasMany(Periodo, { foreignKey: 'facultad_id', as: 'periodos' });
+Periodo.belongsTo(Facultad, { foreignKey: 'facultad_id', as: 'facultad' });
+
+Periodo.belongsTo(Carrera, { foreignKey: 'carrera_id', as: 'carrera' });
+Carrera.hasMany(Periodo, { foreignKey: 'carrera_id', as: 'periodos' });
+
+// Criterio pertenece a Período y a Carrera (para aislar Criterios por carrera dentro de un período)
+Criterio.belongsTo(Periodo, { foreignKey: 'periodo_id', as: 'periodo' });
+Periodo.hasMany(Criterio, { foreignKey: 'periodo_id', as: 'criterios' });
+
+Criterio.belongsTo(Carrera, { foreignKey: 'carrera_id', as: 'carrera' });
+Carrera.hasMany(Criterio, { foreignKey: 'carrera_id', as: 'criterios' });
+
+// ─── Criterio ↔ Subcriterio (31 Subcriterios en los 5 Criterios) ─────────────
+Criterio.hasMany(Subcriterio, { foreignKey: 'criterio_id', as: 'subcriterios' });
+Subcriterio.belongsTo(Criterio, { foreignKey: 'criterio_id', as: 'criterio' });
+
+// ─── Subcriterio ↔ Responsable (Usuario) ────────────────────────────────────
+Subcriterio.belongsToMany(Usuario, { through: 'subcriterios_responsables', as: 'responsables', foreignKey: 'subcriterio_id' });
+Usuario.belongsToMany(Subcriterio, { through: 'subcriterios_responsables', as: 'subcriteriosAsignados', foreignKey: 'usuario_id' });
+
+// ─── Subcriterio ↔ Carpeta (Carpetas dentro del Subcriterio) ────────────────
+Subcriterio.hasMany(Carpeta, { foreignKey: 'subcriterio_id', as: 'carpetas' });
+Carpeta.belongsTo(Subcriterio, { foreignKey: 'subcriterio_id', as: 'subcriterio' });
+Carpeta.belongsTo(Usuario, { foreignKey: 'creado_por_id', as: 'creadoPor' });
+
+// ─── Subcriterio ↔ Actividad (compatibilidad legacy) ────────────────────────
+Subcriterio.hasMany(Actividad, { foreignKey: 'subcriterio_id', as: 'actividades' });
+Actividad.belongsTo(Subcriterio, { foreignKey: 'subcriterio_id', as: 'subcriterio' });
+
+// ─── Indicador (Modelo legacy/equivalente conservado para compatibilidad) ───
+Indicador.belongsTo(Criterio, { foreignKey: 'criterio_id', as: 'criterio' });
+Criterio.hasMany(Indicador, { foreignKey: 'criterio_id', as: 'indicadores' });
+
+// ─── Indicador ↔ Responsable (Usuario) ──────────────────────────────────────
+Indicador.belongsToMany(Usuario, { through: 'indicadores_responsables', as: 'responsables', foreignKey: 'indicador_id' });
+Usuario.belongsToMany(Indicador, { through: 'indicadores_responsables', as: 'indicadoresAsignados', foreignKey: 'usuario_id' });
+
+// ─── Actividad ↔ Indicador (Legacy) ─────────────────────────────────────────
+Actividad.belongsTo(Indicador, { foreignKey: 'indicador_id', as: 'indicador' });
+Indicador.hasMany(Actividad, { foreignKey: 'indicador_id', as: 'actividades' });
+
+// ─── Actividad ↔ Usuario (Restricción de Carpetas) ──────────────────────────
+Actividad.belongsToMany(Usuario, { through: 'actividades_usuarios', as: 'usuariosAsignados', foreignKey: 'actividad_id' });
+Usuario.belongsToMany(Actividad, { through: 'actividades_usuarios', as: 'actividadesAsignadas', foreignKey: 'usuario_id' });
+
+// ─── Documento (vinculado a Carpeta y Subcriterio) ──────────────────────────
+Documento.belongsTo(Usuario, { foreignKey: 'subido_por_id', as: 'subidoPor' });
+Documento.belongsTo(Usuario, { foreignKey: 'firmante_actual_id', as: 'firmanteActual' });
+Documento.belongsTo(Facultad, { foreignKey: 'facultad_id', as: 'facultad' });
+Documento.belongsTo(Subcriterio, { foreignKey: 'subcriterio_id', as: 'subcriterio' });
+Subcriterio.hasMany(Documento, { foreignKey: 'subcriterio_id', as: 'documentos' });
+Documento.belongsTo(Carpeta, { foreignKey: 'carpeta_id', as: 'carpeta' });
+Carpeta.hasMany(Documento, { foreignKey: 'carpeta_id', as: 'documentos' });
+Documento.belongsTo(Actividad, { foreignKey: 'actividad_id', as: 'actividad' });
+Actividad.hasMany(Documento, { foreignKey: 'actividad_id', as: 'documentos' });
+
+// ─── Flujo de Firma Dinámico ────────────────────────────────────────────────
+FlujoFirma.hasMany(PasoFirma, { foreignKey: 'flujo_id', as: 'pasos' });
+PasoFirma.belongsTo(FlujoFirma, { foreignKey: 'flujo_id', as: 'flujo' });
+
+PasoFirma.belongsTo(Rol, { foreignKey: 'rol_id', as: 'rolRequerido' });
+Rol.hasMany(PasoFirma, { foreignKey: 'rol_id', as: 'pasosAsignados' });
+
+PasoFirma.belongsTo(Usuario, { foreignKey: 'usuario_id', as: 'usuarioFirmante' });
+Usuario.hasMany(PasoFirma, { foreignKey: 'usuario_id', as: 'pasosFirma' });
+
+Criterio.belongsTo(FlujoFirma, { foreignKey: 'flujo_id', as: 'flujoFirma' });
+FlujoFirma.hasMany(Criterio, { foreignKey: 'flujo_id', as: 'criterios' });
+
+Subcriterio.belongsTo(FlujoFirma, { foreignKey: 'flujo_id', as: 'flujoFirma' });
+FlujoFirma.hasMany(Subcriterio, { foreignKey: 'flujo_id', as: 'subcriterios' });
+
+Documento.belongsTo(FlujoFirma, { foreignKey: 'flujo_id', as: 'flujoFirma' });
+FlujoFirma.hasMany(Documento, { foreignKey: 'flujo_id', as: 'documentos' });
+
+module.exports = {
+  sequelize,
+  Rol,
+  Usuario,
+  UsuarioRol,
+  UsuarioCarrera,
+  Universidad,
+  Facultad,
+  Carrera,
+  Periodo,
+  Criterio,
+  Indicador,
+  Subcriterio,
+  Carpeta,
+  Actividad,
+  Documento,
+  FlujoFirma,
+  PasoFirma,
+  UsuarioFacultad,
+  UsuarioActividad,
+};

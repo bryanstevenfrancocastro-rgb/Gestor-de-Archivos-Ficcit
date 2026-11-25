@@ -1,0 +1,2057 @@
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  Folder,
+  Upload,
+  Eye,
+  PenLine,
+  FileText,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  XCircle,
+  RefreshCw,
+  Pencil,
+  Trash2,
+  X,
+  Save,
+  Download,
+  Search,
+  Filter,
+  AlertTriangle,
+  CheckCircle2,
+  FolderOpen,
+  Plus,
+  Layers,
+  LayoutGrid,
+  Table as TableIcon,
+} from 'lucide-react';
+import Breadcrumbs from '../components/common/Breadcrumbs';
+import Badge from '../components/common/Badge';
+import { useApp } from '../context/useApp';
+import { ACTIVIDADES_PREDEFINIDAS, INDICADORES_PREDEFINIDOS } from '../data/parametrosPredefinidos';
+
+const STORAGE_CTX_KEY = 'gestdoc_explorador_ctx_v1';
+
+function CarpetaCard({ nombre, descripcion, badgeText, badgeColor = 'gray', onClick, onEdit, onDelete }) {
+  const badgeClasses = {
+    green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200',
+    gray: 'bg-gray-100 text-gray-600 border-gray-200',
+  };
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-navy-200 transition-all duration-200 group relative">
+      <button
+        onClick={onClick}
+        className="flex items-start space-x-4 p-5 text-left w-full"
+      >
+        <div className="w-12 h-12 bg-navy-50 rounded-xl flex items-center justify-center flex-shrink-0 group-hover:bg-navy-100 transition-colors">
+          <Folder size={24} className="text-navy-700" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-navy-900 text-sm leading-snug pr-14">{nombre}</p>
+          {descripcion && <p className="text-xs text-gray-400 mt-1 truncate">{descripcion}</p>}
+          {badgeText && (
+            <span className={`inline-block mt-2 px-2 py-0.5 text-[11px] font-medium rounded-full border ${badgeClasses[badgeColor] || badgeClasses.gray}`}>
+              {badgeText}
+            </span>
+          )}
+        </div>
+        <ChevronRight size={16} className="text-gray-300 group-hover:text-navy-500 mt-1 transition-colors flex-shrink-0" />
+      </button>
+
+      {(onEdit || onDelete) && (
+        <div className="absolute top-3 right-3 flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              onClick={e => { e.stopPropagation(); onEdit(); }}
+              className="p-1.5 text-blue-400 hover:text-blue-600 bg-white hover:bg-blue-50 rounded-lg shadow-sm border border-gray-100 transition-colors"
+              title="Editar"
+            >
+              <Pencil size={12} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={e => { e.stopPropagation(); onDelete(); }}
+              className="p-1.5 text-red-400 hover:text-red-600 bg-white hover:bg-red-50 rounded-lg shadow-sm border border-gray-100 transition-colors"
+              title="Eliminar"
+            >
+              <Trash2 size={12} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModalEditar({ titulo, valor, onChange, onGuardar, onCancelar, extraCampos }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-navy-900">{titulo}</h3>
+          <button onClick={onCancelar} className="text-gray-400 hover:text-gray-600">
+            <X size={18} />
+          </button>
+        </div>
+        <input
+          value={valor}
+          onChange={e => onChange(e.target.value)}
+          className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
+          placeholder="Nombre"
+          autoFocus
+        />
+        {extraCampos}
+        <div className="flex space-x-2 pt-1">
+          <button
+            onClick={onGuardar}
+            className="flex-1 flex items-center justify-center space-x-1.5 px-4 py-2.5 bg-navy-900 text-white text-sm font-medium rounded-lg hover:bg-navy-800 transition-colors"
+          >
+            <Save size={14} /><span>Guardar</span>
+          </button>
+          <button
+            onClick={onCancelar}
+            className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalConfirmar({ abierto, titulo, mensaje, onConfirmar, onCancelar }) {
+  const [cargando, setCargando] = useState(false);
+
+  if (!abierto) return null;
+
+  const handleConfirm = async () => {
+    setCargando(true);
+    try {
+      await onConfirmar();
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-6 w-full max-w-sm mx-auto space-y-4">
+        <div className="flex items-start space-x-3.5">
+          <div className="w-10 h-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center flex-shrink-0 text-red-600">
+            <AlertTriangle size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 leading-6">{titulo || 'Confirmar eliminación'}</h3>
+            <p className="text-sm text-gray-500 mt-1 leading-relaxed">{mensaje}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center space-x-2.5 pt-2">
+          <button
+            type="button"
+            onClick={onCancelar}
+            disabled={cargando}
+            className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={cargando}
+            className="flex-1 flex items-center justify-center space-x-1.5 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm disabled:opacity-50"
+          >
+            {cargando ? <RefreshCw size={14} className="animate-spin" /> : <Trash2 size={14} />}
+            <span>{cargando ? 'Eliminando...' : 'Eliminar'}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ExploradorDeArchivos() {
+  const {
+    universidades,
+    subirDocumento,
+    setDocumentoSeleccionado,
+    usuario,
+    token,
+    cargarDocumentosSubcriterio,
+    cargarDocumentosActividad,
+    _inyectarDocumentosEnSubcriterio,
+    _inyectarDocumentosEnActividad,
+    eliminarDocumento,
+    actualizarUniversidad, eliminarUniversidad,
+    actualizarFacultad, eliminarFacultad,
+    actualizarCarrera, eliminarCarrera,
+    actualizarPeriodo, eliminarPeriodo,
+    actualizarCriterio, eliminarCriterio,
+    actualizarIndicador, eliminarIndicador,
+    agregarCarpeta, actualizarCarpeta, eliminarCarpeta,
+    navParams,
+  } = useApp();
+
+  const cargarDocsFn = cargarDocumentosSubcriterio || cargarDocumentosActividad;
+  const inyectarDocsFn = _inyectarDocumentosEnSubcriterio || _inyectarDocumentosEnActividad;
+
+  const [nivel, setNivel] = useState('universidades');
+  const [selUniId, setSelUniId] = useState(null);
+  const [selFacId, setSelFacId] = useState(null);
+  const [selPerId, setSelPerId] = useState(null);
+  const [selCarrId, setSelCarrId] = useState(null);
+  const [selCritId, setSelCritId] = useState(null);
+  const [selIndId, setSelIndId] = useState(null);
+  const [selCarpetaId, setSelCarpetaId] = useState(null);
+
+  // Vista rápida en Carrera: tabla unificada vs tarjetas
+  const [modoVistaCarrera, setModoVistaCarrera] = useState('tabla'); // 'tabla' | 'carpetas'
+  const [filtroCriterioId, setFiltroCriterioId] = useState('TODOS');
+  const [filtroGrupoSub, setFiltroGrupoSub] = useState('TODOS');
+  const [filtroEvidencia, setFiltroEvidencia] = useState('TODOS'); // 'TODOS' | 'CON_DOCS' | 'PENDIENTES'
+  const [subExpandidoId, setSubExpandidoId] = useState(null);
+  const [subSubiendoId, setSubSubiendoId] = useState(null);
+  const [exitoRapido, setExitoRapido] = useState('');
+
+  const [arrastrandoDrop, setArrastrandoDrop] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const [errorSubida, setErrorSubida] = useState('');
+  const [cargandoDocs, setCargandoDocs] = useState(false);
+  const [modalEdit, setModalEdit] = useState(null);
+  const [modalCrearCarpeta, setModalCrearCarpeta] = useState(null);
+  const [errorCrearCarpeta, setErrorCrearCarpeta] = useState('');
+  const [modalConfirm, setModalConfirm] = useState({ abierto: false, titulo: '', mensaje: '', onConfirm: null });
+  const [errorEdit, setErrorEdit] = useState('');
+  const [eliminandoDocId, setEliminandoDocId] = useState(null);
+  const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('');
+
+  const fileInputRef = useRef();
+  const quickFileInputRef = useRef();
+  const [targetSubIdParaUpload, setTargetSubIdParaUpload] = useState(null);
+  const [targetCarpetaIdParaUpload, setTargetCarpetaIdParaUpload] = useState(null);
+  const autoInitRef = useRef(false);
+
+  // 1. Soporte de salto directo desde Parametrización o navParams
+  useEffect(() => {
+    if (navParams && universidades?.length > 0) {
+      const { univId, facId, perId, carrId, critId, subId } = navParams;
+      if (univId) setSelUniId(Number(univId));
+      if (facId) setSelFacId(Number(facId));
+      if (carrId) setSelCarrId(Number(carrId));
+      if (perId) setSelPerId(Number(perId));
+      if (critId) {
+        setSelCritId(Number(critId));
+        setFiltroCriterioId(String(critId));
+      }
+      if (subId) {
+        autoInitRef.current = true;
+        entrarSubcriterio(Number(subId), critId ? Number(critId) : null);
+        return;
+      } else if (perId && carrId) {
+        autoInitRef.current = true;
+        setNivel('criterios');
+        return;
+      } else if (carrId) {
+        autoInitRef.current = true;
+        setNivel('periodos');
+        return;
+      }
+    }
+  }, [navParams, universidades]);
+
+  // 2. Auto-selección inteligente y restauración de contexto en localStorage
+  // Flujo jerárquico: Universidad → Facultad → Carrera → Período → Criterio → Subcriterio → Actividad → Documentos PDF
+  useEffect(() => {
+    if (!universidades || universidades.length === 0 || autoInitRef.current) return;
+    autoInitRef.current = true;
+
+    try {
+      const guardado = JSON.parse(localStorage.getItem(STORAGE_CTX_KEY) || 'null');
+      if (guardado) {
+        const u = universidades.find(x => x.id === Number(guardado.uniId));
+        const f = u?.facultades?.find(x => x.id === Number(guardado.facId));
+        const c = f?.carreras?.find(x => x.id === Number(guardado.carrId));
+        const p = (c?.periodos || f?.periodos || []).find(x => x.id === Number(guardado.perId));
+
+        if (u && f && c && p) {
+          setSelUniId(u.id);
+          setSelFacId(f.id);
+          setSelCarrId(c.id);
+          setSelPerId(p.id);
+          setNivel('criterios');
+          return;
+        }
+      }
+    } catch {
+      // Ignorar errores de parseo en localStorage
+    }
+
+    // Si no hay sesión previa válida, auto-avanzar niveles con 1 sola opción (Universidad → Facultad → Carrera → Período)
+    if (universidades.length === 1) {
+      const u = universidades[0];
+      setSelUniId(u.id);
+
+      const facs = u.facultades || [];
+      if (facs.length === 1) {
+        const f = facs[0];
+        setSelFacId(f.id);
+
+        const carrs = f.carreras || [];
+        if (carrs.length === 1) {
+          const c = carrs[0];
+          setSelCarrId(c.id);
+
+          const pers = c.periodos || f.periodos || [];
+          if (pers.length === 1) {
+            setSelPerId(pers[0].id);
+            setNivel('criterios');
+          } else {
+            setNivel('periodos');
+          }
+        } else {
+          setNivel('carreras');
+        }
+      } else {
+        setNivel('facultades');
+      }
+    }
+  }, [universidades]);
+
+  // Guardar selección activa en localStorage cuando llega a una carrera y período
+  useEffect(() => {
+    if (selUniId && selFacId && selCarrId && selPerId) {
+      try {
+        localStorage.setItem(
+          STORAGE_CTX_KEY,
+          JSON.stringify({ uniId: selUniId, facId: selFacId, carrId: selCarrId, perId: selPerId })
+        );
+      } catch {
+        // Ignorar errores de cuota
+      }
+    }
+  }, [selUniId, selFacId, selCarrId, selPerId]);
+
+  useEffect(() => {
+    setBusqueda('');
+    setFiltroEstado('');
+  }, [nivel]);
+
+  const userRoles = usuario?.roles || [];
+  const esAdmin = userRoles.includes('ADMINISTRADOR') || userRoles.includes('RECTOR') || userRoles.includes('DECANO');
+
+  const uniActual  = (universidades ?? []).find(u => u.id === Number(selUniId));
+  const facActual  = uniActual?.facultades?.find(f => f.id === Number(selFacId));
+  const carrActual = facActual?.carreras?.find(c => c.id === Number(selCarrId));
+  const periActual = (carrActual?.periodos || facActual?.periodos || []).find(p => p.id === Number(selPerId));
+  const criteriosActivos =
+    periActual?.criterios ||
+    periActual?.carreras?.find(c => c.id === Number(selCarrId))?.criterios ||
+    carrActual?.criterios ||
+    [];
+  const critActual = criteriosActivos.find(c => c.id === Number(selCritId));
+  const subActual  = (
+    critActual?.actividades ||
+    critActual?.subcriterios ||
+    critActual?.indicadores ||
+    criteriosActivos.flatMap(cr => cr.actividades || cr.subcriterios || cr.indicadores || [])
+  )?.find(i => i.id === Number(selIndId));
+  const carpetaActual = (subActual?.carpetas || []).find(cp => cp.id === Number(selCarpetaId)) || null;
+
+  // Handlers de cambio rápido en la barra superior (Universidad → Facultad → Carrera → Período)
+  function handleSelectRapidoUni(id) {
+    const numId = id ? Number(id) : null;
+    setSelUniId(numId);
+    setSelFacId(null);
+    setSelCarrId(null);
+    setSelPerId(null);
+    setSelCritId(null);
+    setSelIndId(null);
+    setNivel(numId ? 'facultades' : 'universidades');
+  }
+
+  function handleSelectRapidoFac(id) {
+    const numId = id ? Number(id) : null;
+    setSelFacId(numId);
+    setSelCarrId(null);
+    setSelPerId(null);
+    setSelCritId(null);
+    setSelIndId(null);
+    if (!numId) {
+      setNivel('facultades');
+      return;
+    }
+    const f = uniActual?.facultades?.find(x => x.id === numId);
+    const carrs = f?.carreras || [];
+    if (carrs.length === 1) {
+      const c = carrs[0];
+      setSelCarrId(c.id);
+      const pers = c.periodos || f?.periodos || [];
+      if (pers.length === 1) {
+        setSelPerId(pers[0].id);
+        setNivel('criterios');
+      } else {
+        setNivel('periodos');
+      }
+    } else {
+      setNivel('carreras');
+    }
+  }
+
+  function handleSelectRapidoCarr(id) {
+    const numId = id ? Number(id) : null;
+    setSelCarrId(numId);
+    setSelPerId(null);
+    setSelCritId(null);
+    setSelIndId(null);
+    setFiltroCriterioId('TODOS');
+    setSubExpandidoId(null);
+    if (!numId) {
+      setNivel('carreras');
+      return;
+    }
+    const c = facActual?.carreras?.find(x => x.id === numId);
+    const pers = c?.periodos || facActual?.periodos || [];
+    if (pers.length === 1) {
+      setSelPerId(pers[0].id);
+      setNivel('criterios');
+    } else {
+      setNivel('periodos');
+    }
+  }
+
+  function handleSelectRapidoPer(id) {
+    const numId = id ? Number(id) : null;
+    setSelPerId(numId);
+    setSelCritId(null);
+    setSelIndId(null);
+    setFiltroCriterioId('TODOS');
+    setSubExpandidoId(null);
+    setNivel(numId ? 'criterios' : 'periodos');
+  }
+
+  async function handleDescargar(doc) {
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/documentos/${doc.id}/descargar`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Error al descargar');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = doc.nombre;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  function breadcrumbItems() {
+    const items = [{ label: 'Inicio', onClick: () => setNivel('universidades') }];
+    if (['facultades','carreras','periodos','criterios','subcriterios','indicadores','documentos'].includes(nivel) && uniActual)
+      items.push({ label: uniActual?.siglas || uniActual?.nombre, onClick: () => setNivel('facultades') });
+    if (['carreras','periodos','criterios','subcriterios','indicadores','documentos'].includes(nivel) && facActual)
+      items.push({ label: facActual?.nombre, onClick: () => setNivel('carreras') });
+    if (['periodos','criterios','subcriterios','indicadores','documentos'].includes(nivel) && carrActual)
+      items.push({ label: carrActual?.nombre, onClick: () => setNivel('periodos') });
+    if (['criterios','subcriterios','indicadores','documentos'].includes(nivel) && periActual)
+      items.push({ label: periActual?.nombre, onClick: () => { setFiltroCriterioId('TODOS'); setFiltroGrupoSub('TODOS'); setNivel('criterios'); } });
+    if (['subcriterios','indicadores','documentos'].includes(nivel) && critActual)
+      items.push({ label: critActual?.nombre, onClick: () => { setFiltroCriterioId(String(critActual.id)); setFiltroGrupoSub('TODOS'); setNivel('criterios'); } });
+    if (nivel === 'documentos' && subActual) {
+      const defPre = (ACTIVIDADES_PREDEFINIDAS || INDICADORES_PREDEFINIDOS).find(p => Number(p.numero) === Number(subActual.numero));
+      const grupoNombre = subActual.grupo_subcriterio ?? defPre?.grupo_subcriterio ?? null;
+      if (grupoNombre) {
+        items.push({
+          label: grupoNombre,
+          onClick: () => {
+            if (critActual) setFiltroCriterioId(String(critActual.id));
+            setFiltroGrupoSub(grupoNombre);
+            setNivel('criterios');
+          },
+        });
+      }
+      items.push({
+        label: `[${subActual.numero}] ${subActual.nombre}`,
+        onClick: carpetaActual ? () => setSelCarpetaId(null) : null,
+      });
+      if (carpetaActual) {
+        items.push({
+          label: `📁 ${carpetaActual.nombre}`,
+          onClick: null,
+        });
+      }
+    }
+    return items;
+  }
+
+  async function entrarSubcriterio(subId, critIdOpcional = null, carpetaIdOpcional = null) {
+    if (critIdOpcional) setSelCritId(critIdOpcional);
+    setSelIndId(subId);
+    setSelCarpetaId(carpetaIdOpcional);
+    setNivel('documentos');
+    setCargandoDocs(true);
+    try {
+      const docs = await cargarDocsFn(subId, null);
+      inyectarDocsFn(subId, docs, null);
+    } finally {
+      setCargandoDocs(false);
+    }
+  }
+
+  async function toggleExpandirSubcriterio(subId, critIdOpcional = null) {
+    if (subExpandidoId === subId) {
+      setSubExpandidoId(null);
+      return;
+    }
+    if (critIdOpcional) setSelCritId(critIdOpcional);
+    setSubExpandidoId(subId);
+    setCargandoDocs(true);
+    try {
+      const docs = await cargarDocsFn(subId, null);
+      inyectarDocsFn(subId, docs, null);
+    } finally {
+      setCargandoDocs(false);
+    }
+  }
+
+  async function recargarDocs(subIdTarget = selIndId) {
+    if (!subIdTarget) return;
+    setCargandoDocs(true);
+    try {
+      const docs = await cargarDocsFn(subIdTarget, null);
+      inyectarDocsFn(subIdTarget, docs, null);
+    } finally {
+      setCargandoDocs(false);
+    }
+  }
+
+  async function manejarArchivo(file, subIdDestino = selIndId, carpetaIdDestino = selCarpetaId) {
+    if (!file || !file.name.toLowerCase().endsWith('.pdf')) {
+      setErrorSubida('Solo se aceptan archivos PDF');
+      return;
+    }
+    if (!subIdDestino) {
+      setErrorSubida('Primero debes seleccionar una actividad para subir el documento PDF.');
+      return;
+    }
+
+    setErrorSubida('');
+    setSubiendo(true);
+    setSubSubiendoId(subIdDestino);
+    try {
+      await subirDocumento(file, subIdDestino, facActual?.id, carpetaIdDestino || null);
+      const docs = await cargarDocsFn(subIdDestino, null);
+      inyectarDocsFn(subIdDestino, docs, null);
+      setExitoRapido(
+        carpetaIdDestino
+          ? `PDF "${file.name}" subido correctamente en la carpeta.`
+          : `PDF "${file.name}" subido directamente en la actividad.`
+      );
+      setTimeout(() => setExitoRapido(''), 3500);
+    } catch (err) {
+      setErrorSubida(err.message || 'Error al subir el archivo');
+    } finally {
+      setSubiendo(false);
+      setSubSubiendoId(null);
+    }
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    setArrastrandoDrop(false);
+    manejarArchivo(e.dataTransfer.files[0], selIndId, selCarpetaId);
+  }
+
+  function handleEliminarDoc(doc, subIdContext = selIndId) {
+    setModalConfirm({
+      abierto: true,
+      titulo: 'Eliminar documento',
+      mensaje: `¿Estás seguro de eliminar "${doc.nombre}"? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        setEliminandoDocId(doc.id);
+        try {
+          await eliminarDocumento(doc.id, subIdContext, doc.carpeta_id || null);
+        } catch (err) {
+          alert(err.message);
+        } finally {
+          setEliminandoDocId(null);
+        }
+      },
+    });
+  }
+
+  function puedeEliminarDoc(doc) {
+    if (userRoles.includes('ADMINISTRADOR') || userRoles.includes('RECTOR')) return true;
+    return doc.subido_por === usuario?.nombre && ['PENDIENTE', 'RECHAZADO'].includes(doc.estado);
+  }
+
+  function puedeFirmar(doc) {
+    if (!doc.estado || doc.estado === 'COMPLETADO' || doc.estado === 'RECHAZADO') return false;
+    // eslint-disable-next-line eqeqeq
+    return doc.firmante_actual_id == usuario?.id;
+  }
+
+  // ── Crear Carpeta Opcional en Actividad ──────────────────────────────────
+  async function guardarCrearCarpeta() {
+    if (!modalCrearCarpeta || !modalCrearCarpeta.nombre?.trim()) return;
+    setErrorCrearCarpeta('');
+    try {
+      const nueva = await agregarCarpeta(modalCrearCarpeta.subId, {
+        nombre: modalCrearCarpeta.nombre.trim(),
+        descripcion: modalCrearCarpeta.descripcion?.trim() || undefined,
+      });
+      setModalCrearCarpeta(null);
+      setExitoRapido(`Carpeta opcional "${nueva.nombre}" creada en la actividad [${modalCrearCarpeta.subNumero}].`);
+      setTimeout(() => setExitoRapido(''), 3500);
+    } catch (err) {
+      setErrorCrearCarpeta(err.message || 'Error al crear la carpeta');
+    }
+  }
+
+  // ── Editar ────────────────────────────────────────────────────────────────
+
+  function abrirEditar(tipo, id, nombre, meta = {}) {
+    setErrorEdit('');
+    setModalEdit({ tipo, id, nombreEdit: nombre, meta });
+  }
+
+  async function guardarEditar() {
+    if (!modalEdit || !modalEdit.nombreEdit.trim()) return;
+    const { tipo, id, nombreEdit, meta } = modalEdit;
+    try {
+      if (tipo === 'universidad') {
+        await actualizarUniversidad(id, { nombre: nombreEdit, siglas: meta.siglas });
+      } else if (tipo === 'facultad') {
+        await actualizarFacultad(id, meta.univId, { nombre: nombreEdit });
+      } else if (tipo === 'carrera') {
+        await actualizarCarrera(id, meta.univId, meta.facId, { nombre: nombreEdit });
+      } else if (tipo === 'periodo') {
+        await actualizarPeriodo(id, meta.univId, meta.facId, meta.carrId, { nombre: nombreEdit });
+      } else if (tipo === 'criterio') {
+        await actualizarCriterio(id, meta.univId, meta.facId, meta.carrId, meta.perId, { nombre: nombreEdit, requiere_firma: meta.requiere_firma });
+      } else if (tipo === 'indicador' || tipo === 'subcriterio' || tipo === 'actividad') {
+        await actualizarIndicador(id, meta.univId, meta.facId, meta.carrId, meta.perId, meta.critId, { nombre: nombreEdit });
+      } else if (tipo === 'carpeta') {
+        await actualizarCarpeta(id, { nombre: nombreEdit, descripcion: meta.descripcion });
+      }
+      setModalEdit(null);
+    } catch (err) {
+      setErrorEdit(err.message);
+    }
+  }
+
+  // ── Eliminar ──────────────────────────────────────────────────────────────
+
+  function handleEliminar(tipo, id, nombre, meta = {}) {
+    setModalConfirm({
+      abierto: true,
+      titulo: `Eliminar ${tipo}`,
+      mensaje: `¿Estás seguro de eliminar "${nombre}"? Esta acción no se puede deshacer.`,
+      onConfirm: async () => {
+        try {
+          if (tipo === 'universidad') {
+            await eliminarUniversidad(id);
+            if (selUniId === id) setNivel('universidades');
+          } else if (tipo === 'facultad') {
+            await eliminarFacultad(id, meta.univId);
+            if (selFacId === id) setNivel('facultades');
+          } else if (tipo === 'carrera') {
+            await eliminarCarrera(id, meta.univId, meta.facId);
+            if (selCarrId === id) setNivel('carreras');
+          } else if (tipo === 'periodo') {
+            await eliminarPeriodo(id, meta.univId, meta.facId, meta.carrId);
+            if (selPerId === id) setNivel('periodos');
+          } else if (tipo === 'criterio') {
+            await eliminarCriterio(id, meta.univId, meta.facId, meta.carrId, meta.perId);
+            if (selCritId === id) setNivel('criterios');
+          } else if (tipo === 'indicador' || tipo === 'subcriterio' || tipo === 'actividad') {
+            await eliminarIndicador(id, meta.univId, meta.facId, meta.carrId, meta.perId, meta.critId);
+            if (selIndId === id) setNivel('criterios');
+          } else if (tipo === 'carpeta') {
+            await eliminarCarpeta(id);
+            if (Number(selCarpetaId) === Number(id)) setSelCarpetaId(null);
+          }
+        } catch (err) {
+          alert(err.message);
+        }
+      },
+    });
+  }
+
+  const todosDocsDeActividad = subActual?.documentos || [];
+  const docsActual = selCarpetaId
+    ? todosDocsDeActividad.filter(d => Number(d.carpeta_id) === Number(selCarpetaId))
+    : todosDocsDeActividad;
+
+  const getFiltrados = (lista) => {
+    if (!lista) return [];
+    return lista.filter(item => {
+      let matchBusqueda = true;
+      let matchFiltro = true;
+
+      if (busqueda) {
+        const term = busqueda.toLowerCase();
+        matchBusqueda = (
+          item.nombre?.toLowerCase().includes(term) ||
+          item.siglas?.toLowerCase().includes(term) ||
+          item.estado?.toLowerCase().includes(term) ||
+          String(item.numero || '').includes(term)
+        );
+      }
+
+      if (filtroEstado && item.estado) {
+        matchFiltro = item.estado === filtroEstado;
+      }
+
+      return matchBusqueda && matchFiltro;
+    });
+  };
+
+  // Cálculo de actividades y avance de la carrera y período seleccionados (sin duplicados)
+  const _actividadesCrudas = (criteriosActivos || []).flatMap(cr =>
+    (cr.actividades || cr.subcriterios || cr.indicadores || []).map(sub => {
+      const totalDocs = typeof sub.cantidadDocumentos === 'number'
+        ? sub.cantidadDocumentos
+        : (sub.documentos?.length || 0);
+      const defPre = (ACTIVIDADES_PREDEFINIDAS || INDICADORES_PREDEFINIDOS).find(p => Number(p.numero) === Number(sub.numero));
+      const grupo_subcriterio = sub.grupo_subcriterio ?? defPre?.grupo_subcriterio ?? null;
+      return {
+        ...sub,
+        grupo_subcriterio,
+        criterioId: cr.id,
+        criterioNombre: cr.nombre,
+        criterioRequiereFirma: cr.requiere_firma,
+        totalDocs,
+      };
+    })
+  );
+  const _idsVistos = new Set();
+  const todasActividadesCarrera = _actividadesCrudas
+    .filter(item => {
+      if (_idsVistos.has(item.id)) return false;
+      _idsVistos.add(item.id);
+      return true;
+    })
+    .sort((a, b) => (a.numero || 0) - (b.numero || 0));
+
+  const totalSubsCarrera = todasActividadesCarrera.length;
+  const subsConEvidencia = todasActividadesCarrera.filter(s => s.totalDocs > 0).length;
+  const totalPdfsCarrera = todasActividadesCarrera.reduce((acc, s) => acc + s.totalDocs, 0);
+  const porcentajeAvance = totalSubsCarrera > 0 ? Math.round((subsConEvidencia / totalSubsCarrera) * 100) : 0;
+
+  // Actividades del criterio activo (antes de filtrar por grupo_subcriterio)
+  const actividadesDeCriterioSeleccionado = todasActividadesCarrera.filter(sub =>
+    filtroCriterioId === 'TODOS' ? true : String(sub.criterioId) === String(filtroCriterioId)
+  );
+
+  const gruposDisponiblesEnCriterio = Array.from(
+    new Set(actividadesDeCriterioSeleccionado.map(s => s.grupo_subcriterio).filter(Boolean))
+  );
+
+  const subcriteriosCarreraFiltrados = actividadesDeCriterioSeleccionado.filter(sub => {
+    if (filtroGrupoSub !== 'TODOS' && sub.grupo_subcriterio !== filtroGrupoSub) {
+      return false;
+    }
+    if (filtroEvidencia === 'CON_DOCS' && sub.totalDocs === 0) return false;
+    if (filtroEvidencia === 'PENDIENTES' && sub.totalDocs > 0) return false;
+    if (busqueda.trim()) {
+      const q = busqueda.toLowerCase();
+      const respStr = (sub.responsables || []).map(r => r.nombre).join(' ').toLowerCase();
+      return (
+        sub.nombre?.toLowerCase().includes(q) ||
+        sub.grupo_subcriterio?.toLowerCase().includes(q) ||
+        sub.criterioNombre?.toLowerCase().includes(q) ||
+        String(sub.numero || '').includes(q) ||
+        sub.responsable_nombre?.toLowerCase().includes(q) ||
+        respStr.includes(q)
+      );
+    }
+    return true;
+  });
+
+  return (
+    <div className="flex flex-col h-full">
+      <Breadcrumbs items={breadcrumbItems()} />
+
+      {/* Input oculto para subida rápida en 1 clic directamente a la Actividad o a una carpeta opcional */}
+      <input
+        ref={quickFileInputRef}
+        type="file"
+        accept=".pdf"
+        className="hidden"
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file && targetSubIdParaUpload) {
+            manejarArchivo(file, targetSubIdParaUpload, targetCarpetaIdParaUpload);
+          }
+          setTargetCarpetaIdParaUpload(null);
+          e.target.value = '';
+        }}
+      />
+
+      {/* ── Barra Superior de Salto Rápido (Contexto en 1 Clic) ── */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex items-center space-x-1.5 text-xs font-semibold text-navy-800 mr-1">
+            <Layers size={14} className="text-navy-600" />
+            <span>Acceso Rápido:</span>
+          </div>
+
+          {/* Selector Universidad (solo si hay más de 1) */}
+          {universidades.length > 1 ? (
+            <select
+              value={selUniId || ''}
+              onChange={e => handleSelectRapidoUni(e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500 font-medium text-gray-700"
+            >
+              <option value="">Universidad...</option>
+              {universidades.map(u => (
+                <option key={u.id} value={u.id}>{u.siglas || u.nombre}</option>
+              ))}
+            </select>
+          ) : uniActual ? (
+            <span className="px-2.5 py-1 bg-navy-50 text-navy-800 rounded-lg text-xs font-semibold border border-navy-100">
+              {uniActual.siglas || uniActual.nombre}
+            </span>
+          ) : null}
+
+          {/* Selector Facultad */}
+          <select
+            value={selFacId || ''}
+            onChange={e => handleSelectRapidoFac(e.target.value)}
+            disabled={!uniActual}
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500 font-medium text-gray-700 disabled:opacity-40"
+          >
+            <option value="">Seleccionar Facultad...</option>
+            {(uniActual?.facultades || []).map(f => (
+              <option key={f.id} value={f.id}>{f.nombre}</option>
+            ))}
+          </select>
+
+          {/* Selector Carrera */}
+          <select
+            value={selCarrId || ''}
+            onChange={e => handleSelectRapidoCarr(e.target.value)}
+            disabled={!facActual}
+            className="text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 bg-gray-50 hover:bg-white focus:outline-none focus:ring-2 focus:ring-navy-500 font-medium text-gray-700 disabled:opacity-40"
+          >
+            <option value="">Seleccionar Carrera...</option>
+            {(facActual?.carreras || []).map(c => (
+              <option key={c.id} value={c.id}>{c.nombre}</option>
+            ))}
+          </select>
+
+          {/* Selector Período */}
+          <select
+            value={selPerId || ''}
+            onChange={e => handleSelectRapidoPer(e.target.value)}
+            disabled={!carrActual}
+            className="text-xs border border-navy-200 rounded-lg px-3 py-1.5 bg-navy-50/60 hover:bg-navy-50 focus:outline-none focus:ring-2 focus:ring-navy-500 font-semibold text-navy-900 disabled:opacity-40"
+          >
+            <option value="">Seleccionar Período...</option>
+            {(carrActual?.periodos || facActual?.periodos || []).map(p => (
+              <option key={p.id} value={p.id}>{p.nombre}</option>
+            ))}
+          </select>
+
+          {/* Buscador integrado en la barra */}
+          <div className="relative flex-1 min-w-[200px] ml-auto">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder={
+                carrActual && (nivel === 'criterios' || nivel === 'subcriterios')
+                  ? 'Buscar por N° (1..31), actividad, subcriterio o responsable...'
+                  : 'Buscar por nombre...'
+              }
+              value={busqueda}
+              onChange={e => setBusqueda(e.target.value)}
+              className="w-full pl-8 pr-4 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 shadow-2xs"
+            />
+          </div>
+
+          {nivel === 'documentos' && (
+            <div className="flex items-center space-x-1.5">
+              <Filter size={14} className="text-gray-400" />
+              <select
+                value={filtroEstado}
+                onChange={e => setFiltroEstado(e.target.value)}
+                className="px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-navy-500 bg-white"
+              >
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="FIRMADO_DIRECTOR">Firmado (Director)</option>
+                <option value="FIRMADO_SUBDECANO">Firmado (Subdecano)</option>
+                <option value="FIRMADO_DECANO">Firmado (Decano)</option>
+                <option value="COMPLETADO">Completado</option>
+                <option value="RECHAZADO">Rechazado</option>
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Alertas rápidas de subida o error */}
+      {(exitoRapido || errorSubida) && (
+        <div className="px-6 pt-3">
+          {exitoRapido && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <CheckCircle2 size={16} className="text-emerald-600" />
+                <span className="text-xs font-medium text-emerald-800">{exitoRapido}</span>
+              </div>
+              <button onClick={() => setExitoRapido('')} className="text-emerald-500 hover:text-emerald-700">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {errorSubida && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <XCircle size={16} className="text-red-500" />
+                <span className="text-xs font-medium text-red-700">{errorSubida}</span>
+              </div>
+              <button onClick={() => setErrorSubida('')} className="text-red-400 hover:text-red-600">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Modal editar */}
+      {modalEdit && (
+        <ModalEditar
+          titulo="Editar nombre"
+          valor={modalEdit.nombreEdit}
+          onChange={v => setModalEdit(p => ({ ...p, nombreEdit: v }))}
+          onGuardar={guardarEditar}
+          onCancelar={() => { setModalEdit(null); setErrorEdit(''); }}
+          extraCampos={
+            <>
+              {modalEdit.tipo === 'universidad' && (
+                <input
+                  value={modalEdit.meta.siglas || ''}
+                  onChange={e => setModalEdit(p => ({ ...p, meta: { ...p.meta, siglas: e.target.value } }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
+                  placeholder="Siglas (ESPE, UIO...)"
+                />
+              )}
+              {modalEdit.tipo === 'carpeta' && (
+                <input
+                  value={modalEdit.meta.descripcion || ''}
+                  onChange={e => setModalEdit(p => ({ ...p, meta: { ...p.meta, descripcion: e.target.value } }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
+                  placeholder="Descripción de la carpeta (opcional)"
+                />
+              )}
+              {errorEdit && <p className="text-xs text-red-600">{errorEdit}</p>}
+            </>
+          }
+        />
+      )}
+
+      {/* Modal Crear Carpeta Opcional en Actividad */}
+      {modalCrearCarpeta && (
+        <ModalEditar
+          titulo={`Nueva Carpeta Opcional en [${modalCrearCarpeta.subNumero}]`}
+          valor={modalCrearCarpeta.nombre}
+          onChange={v => setModalCrearCarpeta(p => ({ ...p, nombre: v }))}
+          onGuardar={guardarCrearCarpeta}
+          onCancelar={() => { setModalCrearCarpeta(null); setErrorCrearCarpeta(''); }}
+          extraCampos={
+            <>
+              <p className="text-xs text-gray-500">
+                Actividad: <strong>[{modalCrearCarpeta.subNumero}] {modalCrearCarpeta.subNombre}</strong>. Las carpetas son opcionales; también puedes subir PDFs directamente sin carpeta.
+              </p>
+              <input
+                value={modalCrearCarpeta.descripcion || ''}
+                onChange={e => setModalCrearCarpeta(p => ({ ...p, descripcion: e.target.value }))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-navy-500"
+                placeholder="Descripción de la carpeta (opcional)"
+              />
+              {errorCrearCarpeta && <p className="text-xs text-red-600">{errorCrearCarpeta}</p>}
+            </>
+          }
+        />
+      )}
+
+      {/* Modal confirmación */}
+      <ModalConfirmar
+        abierto={modalConfirm.abierto}
+        titulo={modalConfirm.titulo}
+        mensaje={modalConfirm.mensaje}
+        onConfirmar={async () => {
+          if (modalConfirm.onConfirm) {
+            await modalConfirm.onConfirm();
+          }
+          setModalConfirm({ abierto: false, titulo: '', mensaje: '', onConfirm: null });
+        }}
+        onCancelar={() => setModalConfirm({ abierto: false, titulo: '', mensaje: '', onConfirm: null })}
+      />
+
+      <div className="flex-1 p-6 overflow-auto">
+        {/* Nivel 1: Universidades */}
+        {nivel === 'universidades' && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">Universidades</p>
+            {universidades.length === 0 ? (
+              <p className="text-sm text-gray-400 mt-8 text-center">No hay universidades configuradas</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {getFiltrados(universidades).map(u => (
+                  <CarpetaCard
+                    key={u.id}
+                    nombre={u.nombre}
+                    descripcion={u.siglas}
+                    badgeText={`${u.facultades?.length || 0} facultades`}
+                    onClick={() => handleSelectRapidoUni(u.id)}
+                    onEdit={esAdmin ? () => abrirEditar('universidad', u.id, u.nombre, { siglas: u.siglas }) : null}
+                    onDelete={esAdmin ? () => handleEliminar('universidad', u.id, u.nombre) : null}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Nivel 2: Facultades */}
+        {nivel === 'facultades' && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">
+              Facultades — {uniActual?.nombre}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getFiltrados(uniActual?.facultades).map(f => (
+                <CarpetaCard
+                  key={f.id}
+                  nombre={f.nombre}
+                  descripcion={`${f.carreras?.length || 0} carreras · ${f.periodos?.length || 0} períodos`}
+                  onClick={() => handleSelectRapidoFac(f.id)}
+                  onEdit={esAdmin ? () => abrirEditar('facultad', f.id, f.nombre, { univId: selUniId }) : null}
+                  onDelete={esAdmin ? () => handleEliminar('facultad', f.id, f.nombre, { univId: selUniId }) : null}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Nivel 3: Carreras */}
+        {nivel === 'carreras' && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">
+              Seleccione una Carrera — {facActual?.nombre}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getFiltrados(facActual?.carreras).map(c => {
+                const periodosDeCarrera = c.periodos || facActual?.periodos || [];
+                return (
+                  <CarpetaCard
+                    key={c.id}
+                    nombre={c.nombre}
+                    descripcion={c.descripcion || `${periodosDeCarrera.length} períodos académicos`}
+                    badgeText={`${periodosDeCarrera.length} período${periodosDeCarrera.length === 1 ? '' : 's'}`}
+                    badgeColor="blue"
+                    onClick={() => handleSelectRapidoCarr(c.id)}
+                    onEdit={esAdmin ? () => abrirEditar('carrera', c.id, c.nombre, { univId: selUniId, facId: selFacId }) : null}
+                    onDelete={esAdmin ? () => handleEliminar('carrera', c.id, c.nombre, { univId: selUniId, facId: selFacId }) : null}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Nivel 4: Períodos */}
+        {nivel === 'periodos' && (
+          <div>
+            <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-4">
+              Períodos Académicos — {carrActual?.nombre} ({facActual?.nombre})
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {getFiltrados(carrActual?.periodos || facActual?.periodos).map(p => {
+                const crits = p.criterios || p.carreras?.find(ca => ca.id === Number(selCarrId))?.criterios || [];
+                const subs = crits.flatMap(cr => cr.actividades || cr.subcriterios || cr.indicadores || []);
+                const conDoc = subs.filter(s => (typeof s.cantidadDocumentos === 'number' ? s.cantidadDocumentos : (s.documentos?.length || 0)) > 0).length;
+                return (
+                  <CarpetaCard
+                    key={p.id}
+                    nombre={p.nombre}
+                    descripcion={`${crits.length} criterios · 8 subcriterios · ${subs.length} actividades`}
+                    badgeText={`${conDoc} / ${subs.length} actividades con PDF`}
+                    badgeColor={conDoc > 0 ? 'green' : 'amber'}
+                    onClick={() => handleSelectRapidoPer(p.id)}
+                    onEdit={esAdmin ? () => abrirEditar('periodo', p.id, p.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId }) : null}
+                    onDelete={esAdmin ? () => handleEliminar('periodo', p.id, p.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId }) : null}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════════════════════════════════════════════════════════════
+            VISTA UNIFICADA DE CARRERA Y PERÍODO (5 Criterios → 8 Subcriterios → 31 Actividades)
+           ══════════════════════════════════════════════════════════════════ */}
+        {(nivel === 'criterios' || nivel === 'subcriterios' || nivel === 'indicadores') && carrActual && periActual && (
+          <div className="space-y-4">
+            {/* Cabecera resumen de la Carrera + Progreso */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                    {carrActual.nombre}
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-navy-50 text-navy-700 border border-navy-200">
+                    {periActual?.nombre}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    · {facActual?.nombre}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Sube o consulta los documentos PDF directamente en cada una de las {totalSubsCarrera} actividades de acreditación.
+                </p>
+              </div>
+
+              {/* Barra de Progreso de Evidencias */}
+              <div className="flex items-center space-x-4">
+                <div className="min-w-[210px]">
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-medium text-gray-600">
+                      Avance: <strong className="text-navy-900">{subsConEvidencia}/{totalSubsCarrera}</strong> actividades
+                    </span>
+                    <span className="font-bold text-navy-800">{porcentajeAvance}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                      style={{ width: `${porcentajeAvance}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {totalPdfsCarrera} documento{totalPdfsCarrera === 1 ? '' : 's'} PDF en total
+                  </p>
+                </div>
+
+                {/* Conmutador Tabla Rápida vs Tarjetas */}
+                <div className="flex items-center bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button
+                    type="button"
+                    onClick={() => setModoVistaCarrera('tabla')}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      modoVistaCarrera === 'tabla' ? 'bg-white text-navy-900 shadow-2xs' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Vista de Tabla Directa"
+                  >
+                    <TableIcon size={13} />
+                    <span>Tabla Rápida</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoVistaCarrera('carpetas')}
+                    className={`flex items-center space-x-1 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                      modoVistaCarrera === 'carpetas' ? 'bg-white text-navy-900 shadow-2xs' : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                    title="Vista por Subcriterios y Actividades"
+                  >
+                    <LayoutGrid size={13} />
+                    <span>Tarjetas</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Píldoras de Filtro por Criterio (1..5) + Estado */}
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiltroCriterioId('TODOS');
+                      setFiltroGrupoSub('TODOS');
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                      filtroCriterioId === 'TODOS'
+                        ? 'bg-navy-900 text-white shadow-2xs'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    Todos ({totalSubsCarrera})
+                  </button>
+                  {criteriosActivos.map(c => {
+                    const cant = (c.actividades || c.subcriterios || c.indicadores || []).length;
+                    const activo = String(filtroCriterioId) === String(c.id);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setFiltroCriterioId(String(c.id));
+                          setFiltroGrupoSub('TODOS');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                          activo
+                            ? 'bg-navy-800 text-white shadow-2xs'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                        }`}
+                      >
+                        {c.nombre} ({cant})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Filtro rápido por estado de documentos */}
+                <div className="flex items-center gap-1.5">
+                  {[
+                    { id: 'TODOS', label: 'Todas' },
+                    { id: 'CON_DOCS', label: `Con PDF (${subsConEvidencia})` },
+                    { id: 'PENDIENTES', label: `Vacías (${totalSubsCarrera - subsConEvidencia})` },
+                  ].map(op => (
+                    <button
+                      key={op.id}
+                      type="button"
+                      onClick={() => setFiltroEvidencia(op.id)}
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+                        filtroEvidencia === op.id
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                          : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      {op.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sub-píldoras de Subcriterios Oficiales (2.1, 2.2, 3.1, 3.2, 4.1, 4.2, 5.1, 5.2) */}
+              {gruposDisponiblesEnCriterio.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 bg-slate-100/80 border border-gray-200 rounded-xl px-3 py-2">
+                  <span className="text-[11px] font-bold text-navy-800 uppercase tracking-wide mr-1 flex items-center space-x-1">
+                    <FolderOpen size={13} className="text-amber-600" />
+                    <span>Subcriterios:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFiltroGrupoSub('TODOS')}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                      filtroGrupoSub === 'TODOS'
+                        ? 'bg-navy-900 text-white'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    Todos ({actividadesDeCriterioSeleccionado.length})
+                  </button>
+                  {gruposDisponiblesEnCriterio.map(grupo => {
+                    const cantGrupo = actividadesDeCriterioSeleccionado.filter(s => s.grupo_subcriterio === grupo).length;
+                    const activo = filtroGrupoSub === grupo;
+                    return (
+                      <button
+                        key={grupo}
+                        type="button"
+                        onClick={() => setFiltroGrupoSub(grupo)}
+                        className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                          activo
+                            ? 'bg-amber-600 text-white shadow-2xs'
+                            : 'bg-white text-navy-900 border border-amber-200 hover:bg-amber-50'
+                        }`}
+                      >
+                        <Folder size={12} className={activo ? 'text-white' : 'text-amber-600'} />
+                        <span>{grupo} ({cantGrupo})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* MODO 1: TABLA RÁPIDA DE ACTIVIDADES CON SUBIDA DIRECTA DE PDF */}
+            {modoVistaCarrera === 'tabla' ? (
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-xs">
+                {subcriteriosCarreraFiltrados.length === 0 ? (
+                  <div className="py-12 text-center text-sm text-gray-400">
+                    No hay actividades que coincidan con el filtro seleccionado.
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                          <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase w-16">N°</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Actividad</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Subcriterio / Criterio</th>
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Responsable</th>
+                          <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Evidencias PDF</th>
+                          <th className="text-right px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {subcriteriosCarreraFiltrados.map((sub, idx) => {
+                          const expandido = subExpandidoId === sub.id;
+                          const docsDeSub = sub.documentos || [];
+                          const subiendoEnEsta = subSubiendoId === sub.id;
+                          const respTexto = sub.responsables?.length > 0
+                            ? sub.responsables.map(r => r.nombre).join(', ')
+                            : sub.responsable_nombre;
+                          const prevGrupo = idx > 0 ? subcriteriosCarreraFiltrados[idx - 1].grupo_subcriterio : null;
+                          const mostrarCabeceraGrupo = Boolean(sub.grupo_subcriterio && sub.grupo_subcriterio !== prevGrupo);
+
+                          return (
+                            <React.Fragment key={`act-${sub.criterioId}-${sub.id}`}>
+                              {mostrarCabeceraGrupo && (
+                                <tr className="bg-amber-50/80 border-y border-amber-200/80">
+                                  <td colSpan={6} className="px-4 py-2">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center space-x-2">
+                                        <FolderOpen size={15} className="text-amber-600 flex-shrink-0" />
+                                        <span className="text-xs font-extrabold text-navy-900 tracking-wide">
+                                          Subcriterio: {sub.grupo_subcriterio}
+                                        </span>
+                                        <span className="text-[11px] font-medium text-gray-500">
+                                          · {sub.criterioNombre}
+                                        </span>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setFiltroGrupoSub(filtroGrupoSub === sub.grupo_subcriterio ? 'TODOS' : sub.grupo_subcriterio)}
+                                        className="text-[11px] font-semibold text-amber-800 hover:underline"
+                                      >
+                                        {filtroGrupoSub === sub.grupo_subcriterio ? 'Ver todos los subcriterios' : 'Filtrar este subcriterio'}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                              <tr
+                                className={`transition-colors ${
+                                  expandido ? 'bg-slate-50/90' : 'hover:bg-gray-50/70'
+                                }`}
+                              >
+                                <td className="px-4 py-3 text-center">
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-md text-xs font-bold bg-navy-100 text-navy-800">
+                                    [{sub.numero}]
+                                  </span>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => entrarSubcriterio(sub.id, sub.criterioId)}
+                                    className="text-left group"
+                                  >
+                                    <span className="font-semibold text-navy-900 group-hover:text-blue-600 transition-colors text-xs">
+                                      {sub.nombre}
+                                    </span>
+                                    {(sub.informacion_ayuda || sub.descripcion) && (
+                                      <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
+                                        {sub.informacion_ayuda || sub.descripcion}
+                                      </p>
+                                    )}
+                                  </button>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  <div className="space-y-0.5">
+                                    {sub.grupo_subcriterio && (
+                                      <div className="text-[11px] font-semibold text-amber-800">{sub.grupo_subcriterio}</div>
+                                    )}
+                                    <div className="text-xs text-gray-600 font-medium">{sub.criterioNombre}</div>
+                                  </div>
+                                </td>
+
+                                <td className="px-4 py-3">
+                                  {respTexto ? (
+                                    <span className="text-xs text-gray-700">{respTexto}</span>
+                                  ) : (
+                                    <span className="text-xs text-gray-400 italic">Sin asignar</span>
+                                  )}
+                                </td>
+
+                                <td className="px-4 py-3 text-center">
+                                  <div className="flex flex-col items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandirSubcriterio(sub.id, sub.criterioId)}
+                                      className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                                        sub.totalDocs > 0
+                                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                          : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                                      }`}
+                                    >
+                                      <FileText size={12} />
+                                      <span>
+                                        {sub.totalDocs} PDF{sub.totalDocs === 1 ? '' : 's'}
+                                      </span>
+                                      {expandido ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                    </button>
+                                    {(sub.carpetas || []).length > 0 && (
+                                      <span className="inline-flex items-center space-x-1 text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                                        <Folder size={10} />
+                                        <span>{sub.carpetas.length} carpeta{sub.carpetas.length === 1 ? '' : 's'}</span>
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+
+                                <td className="px-5 py-3 text-right">
+                                  <div className="flex items-center justify-end space-x-1.5">
+                                    <button
+                                      type="button"
+                                      disabled={subiendoEnEsta}
+                                      onClick={() => {
+                                        setTargetSubIdParaUpload(sub.id);
+                                        setTargetCarpetaIdParaUpload(null);
+                                        quickFileInputRef.current?.click();
+                                      }}
+                                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-navy-900 text-white text-xs font-medium rounded-lg hover:bg-navy-800 transition-colors shadow-2xs disabled:opacity-50"
+                                      title="Subir archivo PDF directamente en esta actividad (sin requerir carpeta)"
+                                    >
+                                      {subiendoEnEsta ? <RefreshCw size={12} className="animate-spin" /> : <Upload size={12} />}
+                                      <span>Subir PDF</span>
+                                    </button>
+
+                                    {esAdmin && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setErrorCrearCarpeta('');
+                                          setModalCrearCarpeta({
+                                            subId: sub.id,
+                                            subNumero: sub.numero,
+                                            subNombre: sub.nombre,
+                                            nombre: '',
+                                            descripcion: '',
+                                          });
+                                        }}
+                                        className="inline-flex items-center space-x-1 px-2 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium rounded-lg hover:bg-amber-100 transition-colors"
+                                        title="Crear carpeta opcional dentro de esta actividad"
+                                      >
+                                        <Plus size={12} />
+                                        <span>Carpeta</span>
+                                      </button>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      onClick={() => entrarSubcriterio(sub.id, sub.criterioId)}
+                                      className="inline-flex items-center space-x-1 px-2.5 py-1.5 bg-navy-50 text-navy-800 border border-navy-200 text-xs font-medium rounded-lg hover:bg-navy-100 transition-colors"
+                                      title="Abrir actividad para ver documentos y carpetas opcionales"
+                                    >
+                                      <Eye size={12} />
+                                      <span>Abrir</span>
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Fila Expandida con Carpetas Opcionales y Documentos PDF de la Actividad */}
+                              {expandido && (
+                                <tr className="bg-slate-50/70">
+                                  <td colSpan={6} className="px-6 py-3 border-t border-gray-100">
+                                    <div className="bg-white rounded-lg border border-gray-200 p-3.5 space-y-3">
+                                      <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-semibold text-navy-900 flex items-center space-x-1.5">
+                                          <FileText size={14} className="text-navy-700" />
+                                          <span>Actividad [{sub.numero}] {sub.nombre}</span>
+                                        </span>
+                                        <div className="flex items-center space-x-2">
+                                          {esAdmin && (
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setErrorCrearCarpeta('');
+                                                setModalCrearCarpeta({
+                                                  subId: sub.id,
+                                                  subNumero: sub.numero,
+                                                  subNombre: sub.nombre,
+                                                  nombre: '',
+                                                  descripcion: '',
+                                                });
+                                              }}
+                                              className="inline-flex items-center space-x-1 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium rounded-md hover:bg-amber-100"
+                                            >
+                                              <Plus size={12} />
+                                              <span>Crear Carpeta (Opcional)</span>
+                                            </button>
+                                          )}
+                                          <button
+                                            type="button"
+                                            disabled={subiendoEnEsta}
+                                            onClick={() => {
+                                              setTargetSubIdParaUpload(sub.id);
+                                              setTargetCarpetaIdParaUpload(null);
+                                              quickFileInputRef.current?.click();
+                                            }}
+                                            className="inline-flex items-center space-x-1 px-2.5 py-1 bg-navy-900 text-white text-xs font-medium rounded-md hover:bg-navy-800 disabled:opacity-50"
+                                          >
+                                            <Upload size={12} />
+                                            <span>Subir PDF directo</span>
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onClick={() => setSubExpandidoId(null)}
+                                            className="text-xs text-gray-400 hover:text-gray-600"
+                                          >
+                                            Cerrar
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      {/* Carpetas opcionales de la actividad (si existen) */}
+                                      {(sub.carpetas || []).length > 0 && (
+                                        <div className="flex flex-wrap items-center gap-2 pt-1 pb-2 border-b border-gray-100">
+                                          <span className="text-[11px] font-semibold text-gray-500">Carpetas opcionales:</span>
+                                          {(sub.carpetas || []).map(carp => (
+                                            <div
+                                              key={carp.id}
+                                              className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-amber-50/80 border border-amber-200 text-xs"
+                                            >
+                                              <button
+                                                type="button"
+                                                onClick={() => entrarSubcriterio(sub.id, sub.criterioId, carp.id)}
+                                                className="inline-flex items-center space-x-1 font-semibold text-amber-900 hover:underline"
+                                                title="Abrir esta carpeta"
+                                              >
+                                                <FolderOpen size={12} className="text-amber-600" />
+                                                <span>{carp.nombre}</span>
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setTargetSubIdParaUpload(sub.id);
+                                                  setTargetCarpetaIdParaUpload(carp.id);
+                                                  quickFileInputRef.current?.click();
+                                                }}
+                                                className="px-1.5 py-0.5 bg-white text-navy-800 border border-amber-200 rounded text-[10px] font-medium hover:bg-navy-50"
+                                                title={`Subir PDF dentro de la carpeta "${carp.nombre}"`}
+                                              >
+                                                + PDF aquí
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+
+                                      {cargandoDocs && docsDeSub.length === 0 ? (
+                                        <div className="py-4 flex justify-center">
+                                          <RefreshCw size={18} className="text-navy-500 animate-spin" />
+                                        </div>
+                                      ) : docsDeSub.length === 0 ? (
+                                        <div className="py-3 text-center">
+                                          <p className="text-xs text-gray-500">
+                                            Aún no hay documentos PDF subidos en esta actividad. Haz clic en "Subir PDF directo" para cargar sin carpeta, o usa una carpeta opcional.
+                                          </p>
+                                        </div>
+                                      ) : (
+                                        <div className="space-y-1.5">
+                                          {docsDeSub.map(doc => {
+                                            const nombreCarpeta =
+                                              doc.carpeta_nombre ||
+                                              (sub.carpetas || []).find(cp => Number(cp.id) === Number(doc.carpeta_id))?.nombre ||
+                                              null;
+                                            return (
+                                              <div
+                                                key={doc.id}
+                                                className="flex items-center justify-between px-3 py-2 rounded-lg border border-gray-100 bg-gray-50/70 hover:bg-white transition-colors"
+                                              >
+                                                <div className="flex items-center space-x-2.5 min-w-0">
+                                                  <FileText size={15} className="text-red-500 flex-shrink-0" />
+                                                  <span className="text-xs font-medium text-navy-900 truncate">{doc.nombre}</span>
+                                                  {nombreCarpeta && (
+                                                    <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                                      <Folder size={10} />
+                                                      <span>{nombreCarpeta}</span>
+                                                    </span>
+                                                  )}
+                                                  <Badge tipo={doc.estado} />
+                                                  {doc.subido_por && (
+                                                    <span className="text-[11px] text-gray-400">· {doc.subido_por}</span>
+                                                  )}
+                                                </div>
+                                                <div className="flex items-center space-x-1.5 flex-shrink-0 ml-2">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => setDocumentoSeleccionado(doc)}
+                                                    className="inline-flex items-center space-x-1 px-2 py-1 text-[11px] font-medium text-navy-700 bg-navy-50 rounded hover:bg-navy-100"
+                                                  >
+                                                    <Eye size={11} />
+                                                    <span>Ver</span>
+                                                  </button>
+                                                  {puedeFirmar(doc) && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setDocumentoSeleccionado(doc)}
+                                                      className="inline-flex items-center space-x-1 px-2 py-1 text-[11px] font-medium text-white bg-navy-800 rounded hover:bg-navy-700"
+                                                    >
+                                                      <PenLine size={11} />
+                                                      <span>Firmar</span>
+                                                    </button>
+                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => handleDescargar(doc)}
+                                                    className="p-1 text-gray-400 hover:text-navy-700 rounded"
+                                                    title="Descargar PDF"
+                                                  >
+                                                    <Download size={12} />
+                                                  </button>
+                                                  {puedeEliminarDoc(doc) && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleEliminarDoc(doc, sub.id)}
+                                                      className="p-1 text-red-400 hover:text-red-600 rounded"
+                                                      title="Eliminar PDF"
+                                                    >
+                                                      <Trash2 size={12} />
+                                                    </button>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* MODO 2: TARJETAS DE SUBCRITERIOS Y ACTIVIDADES */
+              <div className="space-y-4">
+                {filtroGrupoSub !== 'TODOS' && (
+                  <div className="flex items-center justify-between bg-amber-50/70 border border-amber-200 rounded-xl px-4 py-2.5">
+                    <div className="flex items-center space-x-2">
+                      <FolderOpen size={16} className="text-amber-600" />
+                      <span className="text-xs font-bold text-navy-900">Subcriterio: {filtroGrupoSub}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroGrupoSub('TODOS')}
+                      className="text-xs font-semibold text-navy-700 hover:text-navy-900 bg-white border border-gray-200 px-3 py-1 rounded-lg"
+                    >
+                      ← Volver a Subcriterios
+                    </button>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {(() => {
+                    // Si hay un Subcriterio seleccionado (ej. 2.1 PERSONAL ACADÉMICO) o búsqueda activa, mostrar las Actividades individuales
+                    if (filtroGrupoSub !== 'TODOS' || busqueda.trim()) {
+                      return subcriteriosCarreraFiltrados.map(i => {
+                        const respTexto = i.responsables?.length > 0
+                          ? i.responsables.map(r => r.nombre).join(', ')
+                          : i.responsable_nombre;
+                        return (
+                          <CarpetaCard
+                            key={i.id}
+                            nombre={`[${i.numero}] ${i.nombre}`}
+                            descripcion={`${i.grupo_subcriterio ? `${i.grupo_subcriterio} · ` : ''}${i.criterioNombre}${respTexto ? ` · Resp: ${respTexto}` : ''}`}
+                            badgeText={`${i.totalDocs} documento${i.totalDocs === 1 ? '' : 's'} PDF`}
+                            badgeColor={i.totalDocs > 0 ? 'green' : 'amber'}
+                            onClick={() => entrarSubcriterio(i.id, i.criterioId)}
+                            onEdit={esAdmin ? () => abrirEditar('actividad', i.id, i.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId, perId: selPerId, critId: i.criterioId }) : null}
+                            onDelete={esAdmin ? () => handleEliminar('actividad', i.id, i.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId, perId: selPerId, critId: i.criterioId }) : null}
+                          />
+                        );
+                      });
+                    }
+
+                    // Cuando filtroGrupoSub === 'TODOS':
+                    // - Actividades sin subcriterio (Criterio 1) se muestran directamente
+                    // - Actividades con subcriterio (Criterios 2..5) se agrupan bajo tarjetas de su Subcriterio (2.1, 2.2, etc.)
+                    const cards = [];
+                    const gruposVistos = new Set();
+
+                    subcriteriosCarreraFiltrados.forEach(i => {
+                      if (!i.grupo_subcriterio) {
+                        const respTexto = i.responsables?.length > 0
+                          ? i.responsables.map(r => r.nombre).join(', ')
+                          : i.responsable_nombre;
+                        cards.push(
+                          <CarpetaCard
+                            key={`item-${i.id}`}
+                            nombre={`[${i.numero}] ${i.nombre}`}
+                            descripcion={`${i.criterioNombre}${respTexto ? ` · Resp: ${respTexto}` : ''}`}
+                            badgeText={`${i.totalDocs} documento${i.totalDocs === 1 ? '' : 's'} PDF`}
+                            badgeColor={i.totalDocs > 0 ? 'green' : 'amber'}
+                            onClick={() => entrarSubcriterio(i.id, i.criterioId)}
+                            onEdit={esAdmin ? () => abrirEditar('actividad', i.id, i.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId, perId: selPerId, critId: i.criterioId }) : null}
+                            onDelete={esAdmin ? () => handleEliminar('actividad', i.id, i.nombre, { univId: selUniId, facId: selFacId, carrId: selCarrId, perId: selPerId, critId: i.criterioId }) : null}
+                          />
+                        );
+                      } else if (!gruposVistos.has(i.grupo_subcriterio)) {
+                        gruposVistos.add(i.grupo_subcriterio);
+                        const itemsDelGrupo = subcriteriosCarreraFiltrados.filter(
+                          x => x.grupo_subcriterio === i.grupo_subcriterio
+                        );
+                        const docsDelGrupo = itemsDelGrupo.reduce((acc, x) => acc + (x.totalDocs || 0), 0);
+                        cards.push(
+                          <CarpetaCard
+                            key={`grupo-${i.grupo_subcriterio}`}
+                            nombre={i.grupo_subcriterio}
+                            descripcion={`${i.criterioNombre} · Actividades: ${itemsDelGrupo.map(x => `[${x.numero}]`).join(', ')}`}
+                            badgeText={`${itemsDelGrupo.length} actividad${itemsDelGrupo.length === 1 ? '' : 'es'} · ${docsDelGrupo} PDF${docsDelGrupo === 1 ? '' : 's'}`}
+                            badgeColor={docsDelGrupo > 0 ? 'green' : 'blue'}
+                            onClick={() => setFiltroGrupoSub(i.grupo_subcriterio)}
+                          />
+                        );
+                      }
+                    });
+
+                    return cards;
+                  })()}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Nivel Detalle de una Actividad: Subida directa Drag & Drop + Carpetas Opcionales + Tabla de documentos PDF */}
+        {nivel === 'documentos' && subActual && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelCarpetaId(null);
+                  setNivel('criterios');
+                }}
+                className="inline-flex items-center space-x-1.5 text-xs font-semibold text-navy-700 hover:text-navy-900 bg-white border border-gray-200 px-3 py-1.5 rounded-lg shadow-2xs"
+              >
+                <span>← Volver a las Actividades de {carrActual?.nombre}</span>
+              </button>
+
+              {esAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setErrorCrearCarpeta('');
+                    setModalCrearCarpeta({
+                      subId: subActual.id,
+                      subNumero: subActual.numero,
+                      subNombre: subActual.nombre,
+                      nombre: '',
+                      descripcion: '',
+                    });
+                  }}
+                  className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-semibold hover:bg-amber-100 transition-colors"
+                >
+                  <Plus size={14} />
+                  <span>Crear Carpeta (Opcional)</span>
+                </button>
+              )}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start space-x-3">
+              <FileText size={18} className="text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-navy-900">
+                    Actividad [{subActual.numero}] — {subActual.nombre}
+                  </p>
+                  {subActual.grupo_subcriterio && (
+                    <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                      {subActual.grupo_subcriterio}
+                    </span>
+                  )}
+                  {carpetaActual && (
+                    <span className="text-[11px] font-semibold text-navy-800 bg-white px-2.5 py-0.5 rounded-full border border-navy-200">
+                      📁 Carpeta: {carpetaActual.nombre}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-blue-800 mt-0.5">
+                  {subActual.informacion_ayuda || subActual.descripcion || `Puedes subir tus archivos PDF directamente en la actividad [${subActual.numero}] ${subActual.nombre}, o si prefieres organizarlos en carpetas opcionales.`}
+                </p>
+              </div>
+            </div>
+
+            {/* Sección de Carpetas Opcionales de la Actividad (visible cuando existen carpetas) */}
+            {(subActual.carpetas || []).length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2.5 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-navy-900 flex items-center space-x-1.5">
+                    <FolderOpen size={15} className="text-amber-600" />
+                    <span>Carpetas de la Actividad (Opcional)</span>
+                  </span>
+                  {selCarpetaId && (
+                    <button
+                      type="button"
+                      onClick={() => setSelCarpetaId(null)}
+                      className="text-xs font-semibold text-blue-600 hover:underline"
+                    >
+                      Ver todos los documentos de la actividad (sin filtro de carpeta)
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelCarpetaId(null)}
+                    className={`inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                      !selCarpetaId
+                        ? 'bg-navy-900 text-white border-navy-900 shadow-2xs'
+                        : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'
+                    }`}
+                  >
+                    <FileText size={13} />
+                    <span>Todos / Directo en Actividad ({todosDocsDeActividad.length})</span>
+                  </button>
+
+                  {(subActual.carpetas || []).map(carp => {
+                    const activa = Number(selCarpetaId) === Number(carp.id);
+                    const cantEnCarp = todosDocsDeActividad.filter(d => Number(d.carpeta_id) === Number(carp.id)).length;
+                    return (
+                      <div
+                        key={carp.id}
+                        className={`inline-flex items-center rounded-lg border transition-colors ${
+                          activa
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                            : 'bg-amber-50/70 text-navy-900 border-amber-200 hover:bg-amber-100/80'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelCarpetaId(activa ? null : carp.id)}
+                          className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold"
+                        >
+                          <Folder size={13} className={activa ? 'text-white' : 'text-amber-600'} />
+                          <span>{carp.nombre} ({cantEnCarp})</span>
+                        </button>
+                        {esAdmin && (
+                          <div className="flex items-center pr-1.5 space-x-0.5">
+                            <button
+                              type="button"
+                              onClick={() => abrirEditar('carpeta', carp.id, carp.nombre, { descripcion: carp.descripcion })}
+                              className={`p-1 rounded hover:bg-black/10 ${activa ? 'text-white' : 'text-gray-500'}`}
+                              title="Editar nombre de carpeta"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleEliminar('carpeta', carp.id, carp.nombre)}
+                              className={`p-1 rounded hover:bg-black/10 ${activa ? 'text-white' : 'text-red-500'}`}
+                              title="Eliminar carpeta"
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Subida directa en la Actividad (o en la carpeta opcional seleccionada) */}
+            <div>
+              <div
+                onDragOver={e => { e.preventDefault(); setArrastrandoDrop(true); }}
+                onDragLeave={() => setArrastrandoDrop(false)}
+                onDrop={onDrop}
+                className={`border-2 border-dashed rounded-xl p-8 text-center transition-all duration-200 ${
+                  arrastrandoDrop ? 'border-navy-500 bg-navy-50' : 'border-gray-200 bg-white hover:border-navy-300 hover:bg-gray-50'
+                }`}
+              >
+                {subiendo ? (
+                  <div className="flex flex-col items-center space-y-2">
+                    <RefreshCw size={28} className="text-navy-500 animate-spin" />
+                    <p className="text-sm text-navy-700 font-medium">
+                      Subiendo documento {carpetaActual ? `en la carpeta "${carpetaActual.nombre}"` : `directamente en la actividad "[${subActual.numero}] ${subActual.nombre}"`}...
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <Upload size={28} className={`mx-auto mb-3 ${arrastrandoDrop ? 'text-navy-600' : 'text-gray-300'}`} />
+                    <p className="text-sm font-medium text-gray-700">
+                      {carpetaActual ? (
+                        <>Arrastra tu PDF aquí para subirlo en la carpeta <span className="font-bold text-amber-800">"{carpetaActual.nombre}"</span></>
+                      ) : (
+                        <>Arrastra tu PDF aquí para subirlo directamente en la actividad <span className="font-bold text-navy-900">"[{subActual.numero}] {subActual.nombre}"</span> (sin necesidad de carpeta)</>
+                      )}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">o</p>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="mt-2 px-4 py-2 bg-navy-900 text-white text-xs font-medium rounded-lg hover:bg-navy-800 transition-colors"
+                    >
+                      {carpetaActual ? `Seleccionar PDF para "${carpetaActual.nombre}"` : 'Seleccionar archivo PDF'}
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      onChange={e => { manejarArchivo(e.target.files[0], selIndId, selCarpetaId); e.target.value = ''; }}
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Tabla de documentos de la Actividad */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-navy-900 flex items-center space-x-2">
+                  <FileText size={16} className="text-navy-700" />
+                  <span>
+                    {carpetaActual
+                      ? `Documentos en carpeta "${carpetaActual.nombre}" (${docsActual.length})`
+                      : `Documentos en "[{subActual.numero}] ${subActual.nombre}" (${docsActual.length})`}
+                  </span>
+                </h3>
+                <button
+                  onClick={() => recargarDocs(selIndId)}
+                  disabled={cargandoDocs}
+                  className="flex items-center space-x-1 text-xs text-gray-500 hover:text-navy-700 transition-colors disabled:opacity-40"
+                >
+                  <RefreshCw size={13} className={cargandoDocs ? 'animate-spin' : ''} />
+                  <span>Recargar</span>
+                </button>
+              </div>
+
+              {cargandoDocs ? (
+                <div className="py-12 flex justify-center">
+                  <RefreshCw size={24} className="text-navy-400 animate-spin" />
+                </div>
+              ) : docsActual.length === 0 ? (
+                <div className="py-12 text-center">
+                  <FileText size={32} className="mx-auto text-gray-200 mb-2" />
+                  <p className="text-sm text-gray-400">
+                    {carpetaActual
+                      ? `Sin documentos en la carpeta "${carpetaActual.nombre}". Suba el primero arriba.`
+                      : 'Sin documentos en esta actividad. Suba el primero arriba directamente.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Nombre</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Ubicación</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Estado</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Subido por</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Fecha</th>
+                        <th className="text-left px-5 py-3 text-xs font-semibold text-gray-500 uppercase">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {getFiltrados(docsActual).map(doc => {
+                        const nombreCarpeta =
+                          doc.carpeta_nombre ||
+                          (subActual.carpetas || []).find(cp => Number(cp.id) === Number(doc.carpeta_id))?.nombre ||
+                          null;
+                        return (
+                          <tr
+                            key={doc.id}
+                            className={`hover:bg-gray-50/50 transition-colors ${doc.estado === 'RECHAZADO' ? 'bg-red-50/30' : ''}`}
+                          >
+                            <td className="px-5 py-3">
+                              <div className="flex items-center space-x-2">
+                                <FileText size={14} className={doc.estado === 'RECHAZADO' ? 'text-red-300' : 'text-red-400'} />
+                                <span className="font-medium text-gray-800 text-xs">{doc.nombre}</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3">
+                              {nombreCarpeta ? (
+                                <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                  <Folder size={11} />
+                                  <span>{nombreCarpeta}</span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-gray-500">Directo en actividad</span>
+                              )}
+                            </td>
+                            <td className="px-5 py-3">
+                              <Badge tipo={doc.estado} />
+                            </td>
+                          <td className="px-5 py-3 text-gray-600 text-xs">{doc.subido_por}</td>
+                          <td className="px-5 py-3 text-gray-400 text-xs">{doc.fecha}</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => setDocumentoSeleccionado(doc)}
+                                className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium text-navy-700 bg-navy-50 rounded-lg hover:bg-navy-100 transition-colors"
+                              >
+                                <Eye size={12} />
+                                <span>Ver</span>
+                              </button>
+                              <button
+                                onClick={() => handleDescargar(doc)}
+                                title="Descargar PDF"
+                                className="p-1.5 text-gray-400 hover:text-navy-700 hover:bg-navy-50 rounded-lg transition-colors"
+                              >
+                                <Download size={12} />
+                              </button>
+
+                              {doc.estado === 'RECHAZADO' && (
+                                <span className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium text-red-500 bg-red-50 rounded-lg border border-red-100">
+                                  <XCircle size={12} />
+                                  <span>Rechazado</span>
+                                </span>
+                              )}
+
+                              {puedeFirmar(doc) && (
+                                <button
+                                  onClick={() => setDocumentoSeleccionado(doc)}
+                                  className="flex items-center space-x-1 px-2.5 py-1.5 text-xs font-medium text-white bg-navy-800 rounded-lg hover:bg-navy-700 transition-colors"
+                                >
+                                  <PenLine size={12} />
+                                  <span>Firmar</span>
+                                </button>
+                              )}
+
+                              {puedeEliminarDoc(doc) && (
+                                <button
+                                  onClick={() => handleEliminarDoc(doc, selIndId)}
+                                  disabled={eliminandoDocId === doc.id}
+                                  className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40"
+                                  title="Eliminar documento"
+                                >
+                                  {eliminandoDocId === doc.id
+                                    ? <RefreshCw size={12} className="animate-spin" />
+                                    : <Trash2 size={12} />
+                                  }
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
