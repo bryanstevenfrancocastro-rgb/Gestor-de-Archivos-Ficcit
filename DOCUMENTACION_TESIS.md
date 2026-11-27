@@ -1,9 +1,8 @@
 # Documentación Técnica — Sistema de Gestión de Archivos con Firma Electrónica PAdES
 
-> **Proyecto de Titulación** · Universidad de Cuenca  
-> **Autor:**   
-> **Repositorio:** [GESTOR-DE-ARCHIVOS-CON-FIRMA-ELECTRONICA](https://github.com/EstebanSantos08/GESTOR-DE-ARCHIVOS-CON-FIRMA-ELECTRONICA)  
-> **Fecha de documentación:** Agosto 2026
+> **Proyecto de Titulación** · Universidad Católica de Cuenca (UCACUE)  
+> **Repositorio:** [Gestor-de-Archivos-Ficcit](https://github.com/bryanstevenfrancocastro-rgb/Gestor-de-Archivos-Ficcit)  
+> **Fecha de documentación:** Noviembre 2026
 
 ---
 
@@ -1010,15 +1009,15 @@ Gestion de Archivos/
 ### Paso 1 — Clonar el Repositorio
 
 ```bash
-git clone https://github.com/EstebanSantos08/GESTOR-DE-ARCHIVOS-CON-FIRMA-ELECTRONICA.git
-cd "GESTOR-DE-ARCHIVOS-CON-FIRMA-ELECTRONICA"
+git clone https://github.com/bryanstevenfrancocastro-rgb/Gestor-de-Archivos-Ficcit.git
+cd "Gestor-de-Archivos-Ficcit"
 ```
 
 ### Paso 2 — Crear la Base de Datos
 
 ```sql
--- En pgAdmin o psql:
-CREATE DATABASE "Gestion_Archivos";
+-- En pgAdmin o psql (o mediante DATABASE_URL en Neon):
+CREATE DATABASE "gestion_archivos";
 ```
 
 > Las tablas se crean automáticamente al iniciar el servidor (`sync({ alter: true })`).
@@ -1085,19 +1084,21 @@ JWT_EXPIRES_IN=8h
 PORT=3000
 NODE_ENV=development
 
-# ── Archivos y Certificados ───────────────────────────────────────
-UPLOADS_DIR=./uploads
-CERTS_DIR=./certs
-MAX_FILE_SIZE_MB=10
+# ── Almacenamiento en la Nube — Cloudflare R2 (obligatorio en prod) ─
+CLOUDFLARE_R2_ACCOUNT_ID=tu_account_id_hexadecimal
+CLOUDFLARE_R2_ACCESS_KEY_ID=tu_access_key_id
+CLOUDFLARE_R2_SECRET_ACCESS_KEY=tu_secret_access_key
+CLOUDFLARE_R2_BUCKET_NAME=gestion-archivos-docs
+MAX_UPLOAD_MB=20
 
-# ── Certificado Institucional para Firma PAdES ────────────────────
-CERT_P12_PATH=./certs/firma_institucional.p12
-CERT_P12_PASSWORD=password_del_certificado
+# ── Certificado Institucional para Firma PAdES (Opcional, en memoria) ─
+CERT_INSTITUCIONAL_P12_BASE64=
+CERT_INSTITUCIONAL_PASSWORD=
 ```
 
 | Variable | Tipo | Descripción |
 |----------|------|-------------|
-| `DB_HOST` | String | Host de PostgreSQL |
+| `DB_HOST` | String | Host de PostgreSQL (o `DATABASE_URL` en producción) |
 | `DB_PORT` | Integer | Puerto de PostgreSQL (default: 5432) |
 | `DB_NAME` | String | Nombre de la base de datos |
 | `DB_USER` | String | Usuario de PostgreSQL |
@@ -1106,11 +1107,13 @@ CERT_P12_PASSWORD=password_del_certificado
 | `JWT_EXPIRES_IN` | String | Duración de la sesión JWT (ej: `8h`, `1d`) |
 | `PORT` | Integer | Puerto del servidor Express |
 | `NODE_ENV` | String | Entorno: `development` o `production` |
-| `UPLOADS_DIR` | Path | Directorio para guardar los PDFs subidos |
-| `CERTS_DIR` | Path | Directorio de certificados .p12 |
-| `MAX_FILE_SIZE_MB` | Integer | Tamaño máximo de archivo en MB |
-| `CERT_P12_PATH` | Path | Ruta al certificado .p12 institucional |
-| `CERT_P12_PASSWORD` | String | Contraseña del archivo .p12 |
+| `CLOUDFLARE_R2_ACCOUNT_ID` | String | ID de cuenta de Cloudflare R2 |
+| `CLOUDFLARE_R2_ACCESS_KEY_ID` | String | Access Key ID del token R2 |
+| `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | String | Secret Access Key del token R2 |
+| `CLOUDFLARE_R2_BUCKET_NAME` | String | Nombre del bucket en R2 (`gestion-archivos-docs`) |
+| `MAX_UPLOAD_MB` | Integer | Tamaño máximo de archivo PDF en MB (default: 20) |
+| `CERT_INSTITUCIONAL_P12_BASE64` | String | Certificado `.p12` institucional codificado en Base64 (opcional) |
+| `CERT_INSTITUCIONAL_PASSWORD` | String | Contraseña del certificado institucional (opcional) |
 
 ---
 
@@ -1183,21 +1186,20 @@ Las pruebas se ubican en `back-end/tests/`.
 | Rol | Correo Electrónico | Contraseña |
 |-----|-------------------|-----------|
 | `ADMINISTRADOR` | `admin@universidad.edu` | `Admin123!` |
-| `RECTOR` | `rector@universidad.edu` | `Rector123!` |
-| `DECANO` | `decano@universidad.edu` | `Decano123!` |
-| `SUBDECANO` | `subdecano@universidad.edu` | `Subdecano123!` |
-| `DIRECTOR_CARRERA` | `director@universidad.edu` | `Director123!` |
-| `DOCENTE` | `docente@universidad.edu` | `Docente123!` |
-| `RESPONSABLE_AREA` | `agalarza@universidad.edu` | `Galarza123!` |
-| `RESPONSABLE_AREA` | `oalvarez@universidad.edu` | `Alvarez123!` |
+| `RECTOR` | `rector.prueba@ucacue.edu.ec` | `Password123!` |
+| `DECANO` | `decano.prueba@ucacue.edu.ec` | `Password123!` |
+| `SUBDECANO` | `subdecano.prueba@ucacue.edu.ec` | `Password123!` |
+| `DIRECTOR_CARRERA` | `director.prueba@ucacue.edu.ec` | `Password123!` |
+| `DOCENTE` | `docente.prueba@ucacue.edu.ec` | `Password123!` |
+| `RESPONSABLE_AREA` | `responsable.prueba@ucacue.edu.ec` | `Password123!` |
 
 ### Guía por Rol
 
 #### Responsable de Área / Docente
 1. Iniciar sesión con sus credenciales.
 2. Ir al **Explorador de Archivos**.
-3. Navegar: Universidad → Facultad → Carrera → Período → Criterio → Indicador → Actividad.
-4. Seleccionar la actividad asignada y hacer clic en **Subir Documento**.
+3. Navegar: Universidad → Facultad → Carrera → Período → Criterio → Subcriterio → Carpeta (opcional) → Actividad.
+4. Seleccionar la actividad o carpeta asignada y hacer clic en **Subir Documento**.
 5. Arrastrar y soltar el PDF o seleccionarlo desde el explorador de archivos.
 6. El documento queda en estado `PENDIENTE` y el Director de Carrera es notificado.
 

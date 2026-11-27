@@ -1,8 +1,7 @@
 # 📁 Contexto del Proyecto: Gestor de Archivos con Firma Electrónica
 
-> **Última actualización:** 2026-08-27  
-> **Estado:** En desarrollo activo — servidores corriendo (`npm run dev`)  
-> **Repositorio:** `EstebanSantos08/GESTOR-DE-ARCHIVOS-CON-FIRMA-ELECTRONICA`
+> **Nota:** Documento técnico histórico de una iteración previa. Para la documentación vigente consulta [README.md](README.md), [SETUP.md](SETUP.md), [FLUJO.md](FLUJO.md) y [DEPLOY.md](DEPLOY.md).  
+> **Repositorio:** `bryanstevenfrancocastro-rgb/Gestor-de-Archivos-Ficcit`
 
 ---
 

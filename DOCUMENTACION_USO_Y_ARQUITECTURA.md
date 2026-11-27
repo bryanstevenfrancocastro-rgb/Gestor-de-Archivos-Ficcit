@@ -22,10 +22,10 @@ El almacenamiento y navegación dentro del sistema sigue una estructura de **8 n
 2. **Facultad**
 3. **Carrera**
 4. **Período Académico** (ej. `2026-I`)
-5. **Criterio de Acreditación**
-6. **Subcriterio / Indicador**
-7. **Carpeta** (creada y administrada por el rol `ADMINISTRADOR`)
-8. **Documento PDF** (evidencia cargada dentro de la carpeta y sujeta al flujo de firmas)
+5. **Criterio de Acreditación** (5 Criterios)
+6. **Subcriterio Oficial** (8 Subcriterios; el Criterio 1 agrupa directo)
+7. **Carpeta** (nivel opcional creado y administrado por `ADMINISTRADOR`)
+8. **Actividad y Documento PDF** (31 Actividades oficiales con subida directa de PDF o dentro de carpetas)
 
 > **Herencia Automática entre Períodos:** Cuando se crea un nuevo **Período Académico**, el sistema clona automáticamente todos los **Criterios**, **Subcriterios** y **Carpetas** activos de la carrera (junto con el catálogo base de acreditación) mediante `back-end/Utils/catalogoAcreditacion.js`. Asimismo, todo nuevo Criterio, Subcriterio o Carpeta creado por el Administrador se propaga a los períodos activos de la carrera.
 
@@ -34,9 +34,9 @@ El almacenamiento y navegación dentro del sistema sigue una estructura de **8 n
 | Capa | Tecnologías Principales | Archivo Principal / Directorio |
 | :--- | :--- | :--- |
 | **Front-End (SPA)** | React 18, Vite, Tailwind CSS, Lucide Icons, `pdfjs-dist` | `front-end/src/App.jsx`, `front-end/src/context/AppContext.jsx` |
-| **Back-End (API REST)** | Node.js, Express, Sequelize ORM, JWT, Multer | `back-end/server.js`, `back-end/app.js` |
-| **Motor de Firma PDF** | `pdf-lib`, `node-forge` (PKCS#12 / `.p12`), `qrcode`, SHA-256 | `back-end/Service/firmaService.js`, `back-end/Service/workflowService.js` |
-| **Base de Datos y Storage** | PostgreSQL + Cloudflare R2 (con respaldo en disco local) | `back-end/Model/index.js`, `back-end/Service/r2Service.js` |
+| **Back-End (API REST)** | Node.js, Express, Sequelize ORM, JWT, Multer | `back-end/server.js` |
+| **Motor de Firma PDF** | `@signpdf/signpdf`, `pkijs`, `asn1js`, `pdf-lib`, `node-forge` (`.p12`), `qrcode`, SHA-256 | `back-end/Services/firma.service.js`, `back-end/Services/workflow.service.js` |
+| **Base de Datos y Storage** | PostgreSQL (Neon / local) + Cloudflare R2 (`@aws-sdk/client-s3`) | `back-end/Model/index.js`, `back-end/Services/r2.service.js` |
 
 ---
 

@@ -1,4 +1,6 @@
-# 📋 Plan de Arquitectura, Reorganización y Mejora de Usabilidad (Entorno de Pruebas `test`)
+# 📋 Plan de Arquitectura, Reorganización y Mejora de Usabilidad (Histórico)
+
+> **Nota:** Plan de trabajo histórico de iteraciones anteriores. Para el estado y arquitectura vigente consulta [README.md](README.md) y [FLUJO.md](FLUJO.md).
 
 ## 🎯 Estado Actual (Fases 1 a 4 — Completadas)
 
